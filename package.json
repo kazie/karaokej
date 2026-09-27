@@ -1,0 +1,59 @@
+{
+  "name": "karaokej",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@11.26.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm run --parallel \"/^dev:/\"",
+    "build": "vue-tsc -b && vite build && tsdown",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "story:dev": "histoire dev",
+    "story:build": "histoire build",
+    "story:preview": "histoire preview",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev:web": "vite",
+    "dev:server": "tsx watch --clear-screen=false server/index.ts",
+    "start": "node dist-server/index.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@noble/ciphers": "^2.4.0",
+    "hono": "^4.13.9",
+    "uqr": "^0.1.3",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@histoire/plugin-vue": "1.0.0-beta.1",
+    "@types/node": "^24.19.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.12.0",
+    "histoire": "1.0.0-beta.1",
+    "jiti": "^2.7.0",
+    "prettier": "^3.9.9",
+    "tsdown": "^0.23.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.2",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.11"
+  }
+}

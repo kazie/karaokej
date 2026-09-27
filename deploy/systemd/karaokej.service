@@ -1,0 +1,45 @@
+# Karaokej as a systemd *user* service running the container with Podman.
+#
+# Install:
+#   podman build -t localhost/karaokej .
+#   mkdir -p ~/.config/karaokej ~/.config/systemd/user
+#   cp deploy/systemd/karaokej.env.example ~/.config/karaokej/karaokej.env   # then edit it
+#   cp deploy/systemd/karaokej.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now karaokej
+#   loginctl enable-linger "$USER"    # start at boot without logging in
+#
+# Logs: journalctl --user -u karaokej -f
+
+[Unit]
+Description=Karaokej karaoke server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/karaokej/karaokej.env
+ExecStartPre=-/usr/bin/podman rm --force --ignore karaokej
+# --userns=keep-id runs the app as your own user, so it can read the library like you can;
+# :U makes Podman give the data volume to that user.
+# --health-on-failure=kill: after 3 failed health checks the container dies and systemd restarts it.
+ExecStart=/usr/bin/podman run --rm --name karaokej \
+  --userns=keep-id \
+  --publish ${KARAOKEJ_PORT}:3000 \
+  --volume ${KARAOKEJ_LIBRARY_HOST}:/library:ro \
+  --volume karaokej-data:/data:U \
+  --env KARAOKEJ_PUBLIC_URL \
+  --env KARAOKEJ_RESCAN_MINUTES \
+  --health-cmd "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\"" \
+  --health-interval 30s \
+  --health-retries 3 \
+  --health-start-period 20s \
+  --health-on-failure kill \
+  ${KARAOKEJ_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --time 10 karaokej
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

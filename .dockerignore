@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-server/
+.histoire/
+coverage/
+data/
+examples/
+*.kfn
+*.KFN
+.git/
+.github/
+deploy/

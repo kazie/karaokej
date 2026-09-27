@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.histoire/
+*.log
+coverage/
+
+# Never commit karaoke files
+*.kfn
+*.KFN
+examples/
+
+# Local database
+data/
+dist-server/
