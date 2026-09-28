@@ -40,4 +40,10 @@ export const MIGRATIONS: readonly string[] = [
     VALUES (new.rowid, new.title, new.artist, new.album, new.path);
   END;
   `,
+  /* 2: session settings, one JSON value per key */ `
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ]

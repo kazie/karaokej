@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_MUSIC_FILE, DEMO_TEXTS, makeDemoKfn } from '../src/demo/demoSong'
+import { DEMO_MUSIC_FILE, DEMO_TEXTS, makeDemoKfn, makeDuetDemoKfn } from '../src/demo/demoSong'
 import { buildKfn, songIniText } from '../src/kfn/buildKfn'
 import { KfnEntryType, parseKfn } from '../src/kfn/parseKfn'
 import { loadSong, mimeType, sniffMime } from '../src/kfn/song'
+import { buildGaps, lineWindows, shownAt } from '../src/kfn/timeline'
 
 describe('loadSong', () => {
   it.each([false, true])('loads the demo song (encrypted: %s)', (encrypted) => {
@@ -14,6 +15,19 @@ describe('loadSong', () => {
     expect(song.lyrics).toHaveLength(1)
     expect(song.lyrics[0]!.timeline.lines).toHaveLength(DEMO_TEXTS.length)
     expect(song.lyrics[0]!.style.activeColor).toBe('rgb(199 229 92)')
+  })
+
+  it('loads the duet demo: a long intro, then one singer waits while the other sings', () => {
+    const song = loadSong(parseKfn(makeDuetDemoKfn()))
+    expect(song.warnings).toEqual([])
+    const [first, second] = song.lyrics.map((l) => l.timeline)
+    expect(song.lyrics).toHaveLength(2)
+    expect(buildGaps([first!, second!])[0]).toEqual({ startMs: 0, endMs: 6000 })
+    const shown = (t: typeof first, ms: number) => lineWindows(t!, 3000).map((w) => shownAt(w, ms))
+    expect(shown(first, 2000)).toEqual([false, false, false]) // intro
+    expect(shown(second, 8000)).toEqual([false, false, false]) // singer one's verse
+    expect(shown(first, 18_000)).toEqual([false, false, false]) // singer two's verse
+    expect(shown(first, 21_000)).toEqual([false, false, true]) // lead-in to the last line only
   })
 
   it('falls back to the first music entry when Source is missing', () => {

@@ -1,23 +1,45 @@
 <script setup lang="ts">
 import { reactive, shallowRef } from 'vue'
 import KaraokePlayer from './KaraokePlayer.vue'
-import { makeDemoKfn } from '../demo/demoSong'
+import { makeDemoKfn, makeDuetDemoKfn } from '../demo/demoSong'
 import { parseKfn } from '../kfn/parseKfn'
 import { speedLabel } from '../format'
 import { loadSong } from '../kfn/song'
-import { nextRequest } from '../shared/session'
-import { SEEK_STEP_MS, SPEED_STEPS, type NewPlaybackRequest, type PlaybackRequest } from '../shared/protocol'
+import { DEFAULT_SETTINGS, nextRequest } from '../shared/session'
+import {
+  HIGHLIGHT_MODES,
+  LEAD_IN_STEPS,
+  SEEK_STEP_MS,
+  SPEED_STEPS,
+  type HighlightMode,
+  type NewPlaybackRequest,
+  type PlaybackRequest,
+} from '../shared/protocol'
 
 const demo = loadSong(parseKfn(makeDemoKfn()))
+const duetDemo = loadSong(parseKfn(makeDuetDemoKfn()))
 const encryptedDemo = loadSong(parseKfn(makeDemoKfn({ encrypted: true })))
 const local = shallowRef<ReturnType<typeof loadSong>>()
 const state = reactive({
   paused: true,
   ball: true,
   autoSkip: false,
+  leadInMs: DEFAULT_SETTINGS.leadInMs as number,
+  highlight: 'wipe' as HighlightMode,
   playbackRate: 1,
   request: null as PlaybackRequest | null,
 })
+const leadIns = LEAD_IN_STEPS.map((ms) => ({ label: ms ? `${ms / 1000} s` : 'Always', value: ms }))
+const highlights = HIGHLIGHT_MODES.map((m) => ({ label: m, value: m }))
+/**
+ * Fixed "Source" tab code. Histoire would otherwise generate it from the props
+ * on every state change, serializing the song's audio bytes, which hangs the browser.
+ */
+const source = {
+  controlled: `<KaraokePlayer :song="song" :paused="false" :lead-in-ms="3000" highlight="wipe" :ball="true" />`,
+  paused: `<KaraokePlayer :song="song" paused controls />`,
+}
+
 const speeds = SPEED_STEPS.map((s) => ({ label: speedLabel(s), value: s }))
 
 /** Mimic the session: each request gets the next sequence number. */
@@ -33,7 +55,7 @@ async function onFile(event: Event): Promise<void> {
 
 <template>
   <Story title="Screen/KaraokePlayer" :layout="{ type: 'single', iframe: true }">
-    <Variant title="Landscape (16:9)">
+    <Variant title="Landscape (16:9)" :source="source.controlled">
       <div class="frame landscape">
         <KaraokePlayer :song="demo" v-bind="state" controls />
       </div>
@@ -45,6 +67,8 @@ async function onFile(event: Event): Promise<void> {
         <HstCheckbox v-model="state.paused" title="Paused" />
         <HstCheckbox v-model="state.ball" title="Bouncing ball" />
         <HstCheckbox v-model="state.autoSkip" title="Auto-skip long interludes" />
+        <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="state.highlight" title="Highlight" :options="highlights" />
         <HstSelect v-model="state.playbackRate" title="Speed" :options="speeds" />
         <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
         <HstButton @click="send({ kind: 'seekBy', deltaMs: -SEEK_STEP_MS })">−10 s</HstButton>
@@ -52,7 +76,7 @@ async function onFile(event: Event): Promise<void> {
         <HstButton @click="send({ kind: 'skipGap' })">Skip to next verse</HstButton>
       </template>
     </Variant>
-    <Variant title="Portrait phone">
+    <Variant title="Portrait phone" :source="source.controlled">
       <div class="frame portrait">
         <KaraokePlayer :song="demo" v-bind="state" controls />
       </div>
@@ -61,12 +85,28 @@ async function onFile(event: Event): Promise<void> {
         <HstCheckbox v-model="state.ball" title="Bouncing ball" />
       </template>
     </Variant>
-    <Variant title="Encrypted demo song">
+    <Variant title="Duet: one singer waits" :source="source.controlled">
+      <div class="frame landscape">
+        <KaraokePlayer :song="duetDemo" v-bind="state" controls />
+      </div>
+      <template #controls>
+        <p class="note">
+          A 6 s intro, a verse for each singer, then the last line together. With a lead-in, the lyrics show
+          up with the countdown, and each singer's band stays empty until shortly before their turn.
+        </p>
+        <HstCheckbox v-model="state.paused" title="Paused" />
+        <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="state.highlight" title="Highlight" :options="highlights" />
+        <HstCheckbox v-model="state.ball" title="Bouncing ball" />
+        <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
+      </template>
+    </Variant>
+    <Variant title="Encrypted demo song" :source="source.paused">
       <div class="frame landscape">
         <KaraokePlayer :song="encryptedDemo" paused controls />
       </div>
     </Variant>
-    <Variant title="Local .kfn file">
+    <Variant title="Local .kfn file" :source="source.paused">
       <input type="file" accept=".kfn" @change="onFile" />
       <div v-if="local" class="frame landscape">
         <KaraokePlayer :song="local" paused controls />

@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import {
+  HIGHLIGHT_MODES,
   MAX_SINGER_LENGTH,
   SCREEN_COMMANDS,
   type ClientCommand,
   type ClientRole,
+  type HighlightMode,
   type ScanStatus,
   type ServerMessage,
   type SessionState,
 } from '../src/shared/protocol'
 import { initialState, reduce, type SessionAction } from '../src/shared/session'
+import type { SettingsRepository } from './settings'
 import { toSong, type SongRepository } from './songs'
 
 export interface HubClient {
@@ -32,6 +35,10 @@ const bool = (v: unknown, field: string): boolean => {
 const num = (v: unknown, field: string): number => {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new CommandError(`Invalid ${field}`)
   return v
+}
+const highlightMode = (v: unknown, field: string): HighlightMode => {
+  if (!HIGHLIGHT_MODES.includes(v as HighlightMode)) throw new CommandError(`Invalid ${field}`)
+  return v as HighlightMode
 }
 /** Validate an optional field: absent is fine, present must pass `check`. */
 const optional = <T>(v: unknown, check: (v: unknown, field: string) => T, field: string): T | undefined =>
@@ -69,6 +76,10 @@ export function parseCommand(raw: string): ClientCommand {
       return { type: 'setSpeed', rate: num(msg.rate, 'rate') }
     case 'setAutoSkip':
       return { type: 'setAutoSkip', enabled: bool(msg.enabled, 'enabled') }
+    case 'setLeadIn':
+      return { type: 'setLeadIn', ms: num(msg.ms, 'ms') }
+    case 'setHighlight':
+      return { type: 'setHighlight', mode: highlightMode(msg.mode, 'mode') }
     case 'setBall':
       return { type: 'setBall', itemId: str(msg.itemId, 'itemId'), enabled: bool(msg.enabled, 'enabled') }
     case 'ping':
@@ -103,15 +114,29 @@ export function parseCommand(raw: string): ClientCommand {
 }
 
 /** Owns the shared session and fans state out to every connected client. */
+export interface SessionHubOptions {
+  /** Where session settings are kept across restarts; in memory only when absent. */
+  settings?: SettingsRepository
+  newId?: () => string
+  now?: () => number
+}
+
 export class SessionHub {
-  state: SessionState = initialState()
+  state: SessionState
   private readonly clients = new Set<HubClient>()
+  private readonly settings: SettingsRepository | undefined
+  private readonly newId: () => string
+  private readonly now: () => number
 
   constructor(
     private readonly songs: SongRepository,
-    private readonly newId: () => string = randomUUID,
-    private readonly now: () => number = Date.now,
-  ) {}
+    { settings, newId = randomUUID, now = Date.now }: SessionHubOptions = {},
+  ) {
+    this.settings = settings
+    this.newId = newId
+    this.now = now
+    this.state = initialState(settings?.load())
+  }
 
   connect(send: HubClient['send']): HubClient {
     const client: HubClient = { role: 'remote', send }
@@ -172,6 +197,7 @@ export class SessionHub {
   dispatch(action: SessionAction): void {
     const next = reduce(this.state, action)
     if (next === this.state) return
+    if (next.settings !== this.state.settings) this.settings?.save(next.settings)
     this.state = next
     // Serialize once for all clients.
     const json = serialize({ type: 'state', state: next })

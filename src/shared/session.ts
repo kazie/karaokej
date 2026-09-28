@@ -1,5 +1,8 @@
 import {
+  LEAD_IN_STEPS,
   SPEED_STEPS,
+  type LeadInStep,
+  type SessionSettings,
   type SpeedStep,
   type ClientCommand,
   type NewPlaybackRequest,
@@ -25,7 +28,13 @@ export const initialScan: ScanStatus = {
   lastError: null,
 }
 
-export function initialState(): SessionState {
+export const DEFAULT_SETTINGS: SessionSettings = {
+  autoSkipInterludes: false,
+  leadInMs: 3000,
+  highlight: 'wipe',
+}
+
+export function initialState(settings: SessionSettings = DEFAULT_SETTINGS): SessionState {
   return {
     queue: [],
     current: null,
@@ -35,7 +44,7 @@ export function initialState(): SessionState {
     request: null,
     playbackRate: 1,
     skippable: false,
-    settings: { autoSkipInterludes: false },
+    settings,
     screens: 0,
     lastError: null,
     scan: initialScan,
@@ -63,6 +72,14 @@ export function snapSpeed(rate: number): SpeedStep {
   return SPEED_STEPS.reduce<SpeedStep>(
     (best, step) => (Math.abs(step - rate) < Math.abs(best - rate) ? step : best),
     1,
+  )
+}
+
+/** The nearest offered lead-in time. */
+export function snapLeadIn(ms: number): LeadInStep {
+  return LEAD_IN_STEPS.reduce<LeadInStep>(
+    (best, step) => (Math.abs(step - ms) < Math.abs(best - ms) ? step : best),
+    DEFAULT_SETTINGS.leadInMs,
   )
 }
 
@@ -146,6 +163,16 @@ export function reduce(state: SessionState, action: SessionAction): SessionState
       return action.enabled === state.settings.autoSkipInterludes
         ? state
         : { ...state, settings: { ...state.settings, autoSkipInterludes: action.enabled } }
+    case 'setLeadIn': {
+      const leadInMs = snapLeadIn(action.ms)
+      return leadInMs === state.settings.leadInMs
+        ? state
+        : { ...state, settings: { ...state.settings, leadInMs } }
+    }
+    case 'setHighlight':
+      return action.mode === state.settings.highlight
+        ? state
+        : { ...state, settings: { ...state.settings, highlight: action.mode } }
     case 'setBall': {
       const current = state.current && setBall(state.current, action.itemId, action.enabled)
       const queue = state.queue.map((i) => setBall(i, action.itemId, action.enabled))

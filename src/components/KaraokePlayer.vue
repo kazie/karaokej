@@ -7,7 +7,7 @@ import { entryBlob, type KaraokeSong } from '../kfn/song'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { useObjectUrl } from '../composables/useObjectUrl'
 import { buildGaps, countdownStart, gapAt, type Gap } from '../kfn/timeline'
-import type { PlaybackRequest } from '../shared/protocol'
+import type { HighlightMode, PlaybackRequest } from '../shared/protocol'
 import { errorMessage, isAbortError } from '../shared/errors'
 
 const props = withDefaults(
@@ -22,10 +22,22 @@ const props = withDefaults(
     autoSkip?: boolean
     /** Show the bouncing ball over the lyrics. */
     ball?: boolean
+    /** Show a verse this long (ms) before it is sung; 0 shows the lyrics all the time. */
+    leadInMs?: number
+    highlight?: HighlightMode
     /** Show the native audio controls (for stories and local testing). */
     controls?: boolean
   }>(),
-  { paused: false, request: null, playbackRate: 1, autoSkip: false, ball: true, controls: false },
+  {
+    paused: false,
+    request: null,
+    playbackRate: 1,
+    autoSkip: false,
+    ball: true,
+    leadInMs: 0,
+    highlight: 'wipe',
+    controls: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -222,7 +234,14 @@ defineExpose({ play })
         class="band"
         :style="{ top: `${(i / song.lyrics.length) * 100}%`, height: `${100 / song.lyrics.length}%` }"
       >
-        <LyricsView :track="track" :clock="clock" :compact="song.lyrics.length > 1" :ball="ball" />
+        <LyricsView
+          :track="track"
+          :clock="clock"
+          :compact="song.lyrics.length > 1"
+          :ball="ball"
+          :lead-in-ms="leadInMs"
+          :highlight="highlight"
+        />
       </div>
       <InterludeOverlay :gap="gap" :clock="clock" :color="sungColor" />
     </div>

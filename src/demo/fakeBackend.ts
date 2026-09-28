@@ -13,7 +13,7 @@ import type {
   SongPage,
 } from '../shared/protocol'
 import { initialScan, initialState, reduce, type SessionAction } from '../shared/session'
-import { makeDemoKfn } from './demoSong'
+import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
 
 /** Fictional catalog for stories: several categories, accents, symbols and more than one page. */
 function makeCatalog(): Song[] {
@@ -168,9 +168,11 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
     async getInfo(): Promise<ServerInfo> {
       return { publicUrl: 'http://karaokej.local:3000' }
     },
-    async fetchSongFile(): Promise<ArrayBuffer> {
+    async fetchSongFile(id: string): Promise<ArrayBuffer> {
       await delay(latency)
-      const bytes = makeDemoKfn()
+      // "… & Friends" songs are duets.
+      const duet = songs.find((s) => s.id === id)?.title.endsWith('& Friends')
+      const bytes = duet ? makeDuetDemoKfn() : makeDemoKfn()
       return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
     },
   }

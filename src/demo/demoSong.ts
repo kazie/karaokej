@@ -135,9 +135,14 @@ export function makeDemoKfn(options: { encrypted?: boolean } = {}): Uint8Array {
       `${lastLine}|ChgSelTextEffect:Trajectory=LittleShake*1.000000*1.000000*1.000000*1.000000`,
     ],
   })
+  return packDemo('Demo Song', ini, syncs, options.encrypted)
+}
+
+/** Build a demo KFN around `ini`: a tone at every sync mark, plus the demo backgrounds. */
+function packDemo(title: string, ini: string, syncs: number[], encrypted = false): Uint8Array {
   return buildKfn({
-    header: { TITL: 'Demo Song', ARTS: 'Karaokej', SORC: `1,I,${DEMO_MUSIC_FILE}` },
-    key: options.encrypted ? encoder.encode('0123456789abcdef') : undefined,
+    header: { TITL: title, ARTS: 'Karaokej', SORC: `1,I,${DEMO_MUSIC_FILE}` },
+    key: encrypted ? encoder.encode('0123456789abcdef') : undefined,
     entries: [
       { name: DEMO_MUSIC_FILE, type: KfnEntryType.Music, data: demoWav(syncs) },
       ...Object.entries(DEMO_BACKGROUNDS).map(([name, content]) => ({
@@ -145,7 +150,66 @@ export function makeDemoKfn(options: { encrypted?: boolean } = {}): Uint8Array {
         type: KfnEntryType.Image,
         data: encoder.encode(content),
       })),
-      { name: 'Song.ini', type: KfnEntryType.SongIni, data: mixedEncoding(ini), encrypt: options.encrypted },
+      { name: 'Song.ini', type: KfnEntryType.SongIni, data: mixedEncoding(ini), encrypt: encrypted },
     ],
   })
+}
+
+/** Lines (text, start in cs) paced like {@link demoSyncs}, as Song.ini texts and sync marks. */
+function pacedLines(lines: readonly (readonly [number, string])[]): { texts: string[]; syncs: number[] } {
+  const syncs = lines.flatMap(([start, text]) => {
+    let t = start
+    return splitSyllables(text).map((syl) => {
+      const at = t
+      t += syl.endsWith(' ') ? 40 : 30
+      return at
+    })
+  })
+  return { texts: lines.map(([, text]) => text), syncs }
+}
+
+/**
+ * Two singers, each with a lyrics track: a 6 s intro, a verse each (one
+ * waits while the other sings), then the last line together.
+ */
+export const DUET_LINES = {
+  first: [
+    [600, 'Sing/er one sings the first verse'],
+    [950, 'The oth/er band stays emp/ty'],
+    [2300, 'Both of us to/geth/er now'],
+  ],
+  second: [
+    [1350, 'Now sing/er two takes a turn'],
+    [1700, 'Their lines came up just in time'],
+    [2300, 'Both of us to/geth/er now'],
+  ],
+} as const
+
+/** A synthetic duet KFN, for trying out how lyrics come and go per singer. */
+export function makeDuetDemoKfn(): Uint8Array {
+  const first = pacedLines(DUET_LINES.first)
+  const second = pacedLines(DUET_LINES.second)
+  const ini = songIniText({
+    title: 'Duet Demo',
+    artist: 'Karaokej',
+    album: 'Demo',
+    musicFile: DEMO_MUSIC_FILE,
+    backgroundImage: 'demo2.svg',
+    ...first,
+    activeColor: '#C7E55CFF',
+    inactiveColor: '#F9F8F4FF',
+    frameColor: '#010101FF',
+    inactiveFrameColor: '#1E4D42FF',
+    moreLyrics: [
+      {
+        ...second,
+        activeColor: '#FF8FB1FF',
+        inactiveColor: '#F9F8F4FF',
+        frameColor: '#010101FF',
+        inactiveFrameColor: '#5A1E3AFF',
+      },
+    ],
+  })
+  const syncs = [...new Set([...first.syncs, ...second.syncs])].sort((a, b) => a - b)
+  return packDemo('Duet Demo', ini, syncs)
 }

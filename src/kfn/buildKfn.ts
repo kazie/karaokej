@@ -111,12 +111,8 @@ export function buildKfn({ header = {}, entries, key }: BuildKfnOptions): Uint8A
   return w.finish()
 }
 
-export interface SongIniOptions {
-  title?: string
-  artist?: string
-  album?: string
-  musicFile: string
-  backgroundImage?: string
+/** One lyrics track (effect ID 1) of a Song.ini. */
+export interface SongIniLyrics {
   texts: string[]
   /** Centiseconds, one per syllable. */
   syncs: number[]
@@ -125,10 +121,20 @@ export interface SongIniOptions {
   inactiveColor?: string
   frameColor?: string
   inactiveFrameColor?: string
-  /** `AnimN` values (`<cs>|<Action>:<k=v,...>`) for the background effect. */
-  backgroundAnims?: string[]
-  /** `AnimN` values for the lyrics effect. */
+  /** `AnimN` values (`<cs>|<Action>:<k=v,...>`) for the lyrics effect. */
   lyricsAnims?: string[]
+}
+
+export interface SongIniOptions extends SongIniLyrics {
+  title?: string
+  artist?: string
+  album?: string
+  musicFile: string
+  backgroundImage?: string
+  /** `AnimN` values for the background effect. */
+  backgroundAnims?: string[]
+  /** More lyrics tracks after the first (duets, backing vocals). */
+  moreLyrics?: SongIniLyrics[]
 }
 
 const animLines = (anims: string[] = []) => [
@@ -136,23 +142,12 @@ const animLines = (anims: string[] = []) => [
   ...anims.map((a, i) => `Anim${i}=${a}`),
 ]
 
-/** Write a Song.ini in the layout KaraFun Studio produces. */
-export function songIniText(o: SongIniOptions): string {
-  const effects: string[][] = []
-  if (o.backgroundImage) {
-    effects.push([
-      'ID=51',
-      'Enabled=-1',
-      'Color=#000000',
-      `LibImage=${o.backgroundImage}`,
-      ...animLines(o.backgroundAnims),
-    ])
-  }
+function lyricsEffect(o: SongIniLyrics): string[] {
   const syncLines: string[] = []
   for (let i = 0; i < o.syncs.length; i += 40) {
     syncLines.push(`Sync${syncLines.length}=${o.syncs.slice(i, i + 40).join(',')}`)
   }
-  effects.push([
+  return [
     'ID=1',
     'Enabled=-1',
     ...syncLines,
@@ -167,7 +162,22 @@ export function songIniText(o: SongIniOptions): string {
     ...animLines(o.lyricsAnims),
     `TextCount=${o.texts.length}`,
     ...o.texts.map((t, i) => `Text${i}=${t}`),
-  ])
+  ]
+}
+
+/** Write a Song.ini in the layout KaraFun Studio produces. */
+export function songIniText(o: SongIniOptions): string {
+  const effects: string[][] = []
+  if (o.backgroundImage) {
+    effects.push([
+      'ID=51',
+      'Enabled=-1',
+      'Color=#000000',
+      `LibImage=${o.backgroundImage}`,
+      ...animLines(o.backgroundAnims),
+    ])
+  }
+  for (const lyrics of [o, ...(o.moreLyrics ?? [])]) effects.push(lyricsEffect(lyrics))
 
   return [
     '[General]',

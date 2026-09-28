@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { openDb } from '../../server/db/database'
 import { parseCommand, SessionHub } from '../../server/hub'
+import { SettingsRepository } from '../../server/settings'
 import { SongRepository } from '../../server/songs'
 import type { ServerMessage } from '../../src/shared/protocol'
 
@@ -11,11 +12,7 @@ function setup() {
      VALUES ('s1', 'A/one.kfn', 'A', 'One', 'Artist', '', 1, 1, 1), ('s2', 'A/two.kfn', 'A', 'Two', '', '', 1, 1, 1)`,
   ).run()
   let n = 0
-  const hub = new SessionHub(
-    new SongRepository(db),
-    () => `item${++n}`,
-    () => 42,
-  )
+  const hub = new SessionHub(new SongRepository(db), { newId: () => `item${++n}`, now: () => 42 })
   const client = () => {
     const inbox: ServerMessage[] = []
     const c = hub.connect((json) => inbox.push(JSON.parse(json) as ServerMessage))
@@ -47,6 +44,13 @@ describe('parseCommand', () => {
     expect(() => parseCommand('{"type":"seekBy","deltaMs":null}')).toThrow(/deltaMs/)
     expect(() => parseCommand('{"type":"setBall","itemId":"a","enabled":"yes"}')).toThrow(/enabled/)
     expect(() => parseCommand('{"type":"setAutoSkip"}')).toThrow(/enabled/)
+    expect(parseCommand('{"type":"setLeadIn","ms":2000}')).toEqual({ type: 'setLeadIn', ms: 2000 })
+    expect(() => parseCommand('{"type":"setLeadIn"}')).toThrow(/ms/)
+    expect(parseCommand('{"type":"setHighlight","mode":"instant"}')).toEqual({
+      type: 'setHighlight',
+      mode: 'instant',
+    })
+    expect(() => parseCommand('{"type":"setHighlight","mode":"sparkly"}')).toThrow(/mode/)
     expect(parseCommand('{"type":"skipInterlude"}')).toEqual({ type: 'skipInterlude' })
     expect(parseCommand('{"type":"enqueue","songId":"s","ball":false}')).toMatchObject({ ball: false })
     const progress = parseCommand('{"type":"progress","itemId":"a","positionMs":1}')
@@ -154,5 +158,18 @@ describe('SessionHub', () => {
     const a = ctx.client()
     ctx.hub.handle(a.c, JSON.stringify({ type: 'pause' }))
     expect(a.inbox).toHaveLength(1)
+  })
+})
+
+describe('SessionHub settings', () => {
+  it('saves settings changes and starts from the saved ones', () => {
+    const db = openDb(':memory:')
+    const songs = new SongRepository(db)
+    const hub = new SessionHub(songs, { settings: new SettingsRepository(db) })
+    const remote = hub.connect(() => {})
+    hub.handle(remote, JSON.stringify({ type: 'setAutoSkip', enabled: true }))
+    hub.handle(remote, JSON.stringify({ type: 'setLeadIn', ms: 8000 }))
+    const restarted = new SessionHub(songs, { settings: new SettingsRepository(db) })
+    expect(restarted.state.settings).toEqual({ autoSkipInterludes: true, leadInMs: 8000, highlight: 'wipe' })
   })
 })

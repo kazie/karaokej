@@ -4,7 +4,8 @@ import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { canvasTranslate, cssTransition, latestFrame, NO_SEL_TEXT_EFFECT } from '../kfn/effects'
 import { ballAt, fillFraction, wipeFront } from '../kfn/wipe'
 import type { LyricsTrack } from '../kfn/song'
-import { focusLineIndex, syllableProgress, type TimedLine } from '../kfn/timeline'
+import { focusLineIndex, lineWindows, shownAt, syllableProgress, type TimedLine } from '../kfn/timeline'
+import type { HighlightMode } from '../shared/protocol'
 
 /**
  * Scrolling lyrics for one track. Sizes use container query units, so the
@@ -24,8 +25,12 @@ const props = withDefaults(
     compact?: boolean
     /** Bounce a ball over the syllables of the line being sung. */
     ball?: boolean
+    /** Show a verse this long (ms) before it is sung; 0 shows the lyrics all the time. */
+    leadInMs?: number
+    /** Fill the sung color in with a smooth wipe, or a whole syllable at a time. */
+    highlight?: HighlightMode
   }>(),
-  { fontScale: 0.3, compact: false, ball: false },
+  { fontScale: 0.3, compact: false, ball: false, leadInMs: 0, highlight: 'wipe' },
 )
 
 const LAYOUT = {
@@ -55,6 +60,10 @@ const lineWidthsEm = computed(() => {
 
 const focusIndex = computed(() => focusLineIndex(props.track.timeline, props.clock()))
 const focusLine = computed(() => lines.value[focusIndex.value])
+
+/** When each line is on screen, so lyrics don't sit there through long pauses. */
+const windows = computed(() => lineWindows(props.track.timeline, props.leadInMs))
+const shown = (line: TimedLine) => shownAt(windows.value[line.index]!, props.clock())
 
 /**
  * Only lines near the focus are rendered. One extra, invisible line on each
@@ -159,7 +168,9 @@ const front = computed(() =>
 )
 
 const ballPosition = computed(() =>
-  props.ball && focusLine.value && edges.value ? ballAt(focusLine.value, edges.value, props.clock()) : null,
+  props.ball && focusLine.value && edges.value && shown(focusLine.value)
+    ? ballAt(focusLine.value, edges.value, props.clock())
+    : null,
 )
 
 /**
@@ -174,7 +185,7 @@ function selClass(line: TimedLine, si: number): string | undefined {
 
 function visible(line: TimedLine): boolean {
   const offset = line.index - focusIndex.value
-  return offset >= -layout.value.before && offset <= layout.value.after
+  return offset >= -layout.value.before && offset <= layout.value.after && shown(line)
 }
 
 function lineState(line: TimedLine): 'past' | 'current' | 'future' {
@@ -185,6 +196,7 @@ function lineState(line: TimedLine): 'past' | 'current' | 'future' {
 }
 
 function progress(line: TimedLine, si: number): number {
+  if (props.highlight === 'instant') return props.clock() >= line.syllables[si]!.start ? 1 : 0
   if (line.index === focusIndex.value && front.value !== null && edges.value)
     return fillFraction(edges.value, front.value, si)
   return lineState(line) === 'past' ? 1 : 0

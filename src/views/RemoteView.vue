@@ -7,7 +7,13 @@ import QueueList from '../components/QueueList.vue'
 import SongList from '../components/SongList.vue'
 import { useServices } from '../services'
 import { errorMessage, isAbortError } from '../shared/errors'
-import type { CategoryCount, ClientCommand, Song } from '../shared/protocol'
+import {
+  LEAD_IN_STEPS,
+  type CategoryCount,
+  type ClientCommand,
+  type HighlightMode,
+  type Song,
+} from '../shared/protocol'
 
 const { connect, searchSongs, getCategories } = useServices()
 const { state, connected, error, send, reconnectNow } = connect('remote')
@@ -103,6 +109,20 @@ function toggleAutoSkip(event: Event): void {
     box.checked = !!state.value?.settings.autoSkipInterludes
 }
 
+const leadInLabel = (ms: number) => (ms ? `${ms / 1000} s before` : 'Always')
+
+function changeLeadIn(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (!command({ type: 'setLeadIn', ms: Number(select.value) }))
+    select.value = String(state.value?.settings.leadInMs ?? '')
+}
+
+function changeHighlight(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (!command({ type: 'setHighlight', mode: select.value as HighlightMode }))
+    select.value = state.value?.settings.highlight ?? ''
+}
+
 function addSelected(singer: string, ball: boolean): void {
   if (!selected.value) return
   // On failure the dialog stays open so the user can retry once reconnected.
@@ -132,8 +152,22 @@ function addSelected(singer: string, ball: boolean): void {
     <section v-if="showSettings && state" class="settings" aria-label="Settings">
       <label>
         <input type="checkbox" :checked="state.settings.autoSkipInterludes" @change="toggleAutoSkip" />
-        Auto-skip long intros and interludes (for everyone)
+        Auto-skip long intros and interludes
       </label>
+      <label>
+        Show lyrics
+        <select :value="state.settings.leadInMs" @change="changeLeadIn">
+          <option v-for="ms in LEAD_IN_STEPS" :key="ms" :value="ms">{{ leadInLabel(ms) }}</option>
+        </select>
+      </label>
+      <label>
+        Highlight
+        <select :value="state.settings.highlight" @change="changeHighlight">
+          <option value="wipe">Sliding</option>
+          <option value="instant">Whole syllables</option>
+        </select>
+      </label>
+      <p class="settings-note">These settings apply for everyone.</p>
     </section>
 
     <p v-if="state && !connected" class="banner warning" role="status">Reconnecting to the karaoke server…</p>
@@ -291,10 +325,30 @@ h1 span {
   cursor: pointer;
 }
 
+.settings label + label {
+  margin-top: 0.6rem;
+}
+
 .settings input {
   width: 1.1rem;
   height: 1.1rem;
   accent-color: var(--accent);
+}
+
+.settings select {
+  margin-left: auto;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--surface-2);
+  border-radius: calc(var(--radius) / 2);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-note {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .conn {
