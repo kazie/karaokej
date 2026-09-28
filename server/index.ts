@@ -5,7 +5,6 @@ import { loadConfig } from './config'
 import { openDb } from './db/database'
 import { SessionHub } from './hub'
 import { Indexer } from './indexer'
-import { lanAddresses } from './network'
 import { SongRepository } from './songs'
 
 const config = loadConfig()
@@ -19,11 +18,7 @@ const app = createApp({ ...config, db, songs, indexer, hub, staticDir: config.st
 const wss = new WebSocketServer({ noServer: true })
 const server = serve(
   { fetch: app.fetch, port: config.port, hostname: config.host, websocket: { server: wss } },
-  (info) => {
-    const urls = [config.publicUrl, ...lanAddresses().map((ip) => `http://${ip}:${info.port}`)]
-    console.log(`Karaokej listening on port ${info.port}`)
-    for (const url of urls.filter(Boolean)) console.log(`  screen: ${url}/screen   remote: ${url}/remote`)
-  },
+  (info) => console.log(`Karaokej listening on port ${info.port}`),
 )
 
 // Drop WebSocket clients that stopped answering pings (e.g. a phone that went to sleep).

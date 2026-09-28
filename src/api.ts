@@ -71,20 +71,7 @@ export async function fetchSongFile(
   }
 }
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
-
-/**
- * The URL phones should open. Prefers the configured public URL; when the screen
- * itself runs on localhost, swaps in the server's LAN address so the QR code works.
- */
-export function remoteUrl(
-  info: Pick<ServerInfo, 'publicUrl' | 'lanAddresses'> | null,
-  location: Location,
-): string {
-  if (info?.publicUrl) return `${info.publicUrl}/remote`
-  const lan = info?.lanAddresses[0]
-  if (lan && LOCAL_HOSTS.has(location.hostname)) {
-    return `${location.protocol}//${lan}${location.port ? `:${location.port}` : ''}/remote`
-  }
-  return `${location.origin}/remote`
+/** The URL phones should open: the configured public URL, else the screen's own origin. */
+export function remoteUrl(info: Pick<ServerInfo, 'publicUrl'> | null, location: Location): string {
+  return `${info?.publicUrl ?? location.origin}/remote`
 }

@@ -131,12 +131,8 @@ export interface CategoryCount {
 }
 
 export interface ServerInfo {
-  /** Configured public URL, or null to derive one from the LAN addresses. */
+  /** Configured public URL, or null to use the address the screen was opened on. */
   publicUrl: string | null
-  /** LAN IPv4 addresses, for building a phone-reachable URL. */
-  lanAddresses: string[]
-  songCount: number
-  scan: ScanStatus
 }
 
 export const WS_PATH = '/ws'

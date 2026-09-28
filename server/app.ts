@@ -10,7 +10,6 @@ import { WS_PATH } from '../src/shared/protocol'
 import type { Database } from './db/database'
 import type { SessionHub } from './hub'
 import type { Indexer } from './indexer'
-import { lanAddresses } from './network'
 import type { SongRepository } from './songs'
 
 export interface AppDeps {
@@ -57,14 +56,7 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok, db: dbOk, libraryReachable }, ok ? 200 : 503)
   })
 
-  app.get('/api/info', (c) =>
-    c.json<ServerInfo>({
-      publicUrl: deps.publicUrl,
-      songCount: indexer.status.songCount,
-      scan: indexer.status,
-      lanAddresses: lanAddresses(),
-    }),
-  )
+  app.get('/api/info', (c) => c.json<ServerInfo>({ publicUrl: deps.publicUrl }))
 
   app.get('/api/songs', (c) =>
     c.json(

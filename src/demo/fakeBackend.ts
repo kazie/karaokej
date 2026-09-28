@@ -166,12 +166,7 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
       return [...counts].map(([category, count]) => ({ category, count }))
     },
     async getInfo(): Promise<ServerInfo> {
-      return {
-        publicUrl: 'http://karaokej.local:3000',
-        lanAddresses: [],
-        songCount: songs.length,
-        scan: state.value.scan,
-      }
+      return { publicUrl: 'http://karaokej.local:3000' }
     },
     async fetchSongFile(): Promise<ArrayBuffer> {
       await delay(latency)

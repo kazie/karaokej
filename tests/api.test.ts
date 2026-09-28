@@ -33,15 +33,16 @@ describe('remoteUrl', () => {
   const loc = (href: string) => new URL(href) as unknown as Location
 
   it('prefers the configured public URL', () => {
-    expect(
-      remoteUrl({ publicUrl: 'http://karaoke.lan', lanAddresses: [] }, loc('http://localhost:5173/screen')),
-    ).toBe('http://karaoke.lan/remote')
+    expect(remoteUrl({ publicUrl: 'http://karaoke.lan' }, loc('http://localhost:5173/screen'))).toBe(
+      'http://karaoke.lan/remote',
+    )
   })
 
-  it('swaps localhost for the LAN address so phones can connect', () => {
-    const info = { publicUrl: null, lanAddresses: ['192.0.2.7'] }
-    expect(remoteUrl(info, loc('http://localhost:5173/screen'))).toBe('http://192.0.2.7:5173/remote')
-    expect(remoteUrl(info, loc('http://karaoke.lan:3000/screen'))).toBe('http://karaoke.lan:3000/remote')
+  it('falls back to the address the screen was opened on', () => {
+    expect(remoteUrl({ publicUrl: null }, loc('http://karaoke.lan:3000/screen'))).toBe(
+      'http://karaoke.lan:3000/remote',
+    )
+    expect(remoteUrl(null, loc('http://192.0.2.7:5173/screen'))).toBe('http://192.0.2.7:5173/remote')
   })
 })
 

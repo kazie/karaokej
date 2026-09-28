@@ -15,7 +15,7 @@ pnpm install
 KARAOKEJ_LIBRARY=/path/to/Karaoke pnpm dev
 ```
 
-Open `http://localhost:5173/screen` on the screen and scan the QR code with a phone. The dev server listens on your LAN, so phones can reach it.
+Open `http://<your-lan-ip>:5173/screen` on the screen and scan the QR code with a phone. The dev server listens on your LAN, so phones can reach it. The QR code points at the address the screen was opened on, so `localhost` won't work from a phone unless `KARAOKEJ_PUBLIC_URL` is set.
 
 For production:
 
@@ -28,14 +28,14 @@ The first index of a large library takes a while (about 35 s for 2,000+ files ov
 
 ## Configuration
 
-| Variable                  | Default            | Purpose                                                                                                                                         |
-| ------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KARAOKEJ_LIBRARY`        | (required)         | Folder containing `.kfn` files. Subfolders are fine, and the top-level folder becomes the category.                                             |
-| `KARAOKEJ_DB`             | `data/karaokej.db` | SQLite index. It's safe to delete: it is rebuilt from the library.                                                                              |
-| `PORT`                    | `3000`             | HTTP port.                                                                                                                                      |
-| `HOST`                    | all interfaces     | Listen address.                                                                                                                                 |
-| `KARAOKEJ_PUBLIC_URL`     | auto               | URL phones should open, used for the QR code. Auto-detected from the LAN IP when not set. Set it when running in a container or behind a proxy. |
-| `KARAOKEJ_RESCAN_MINUTES` | `0`                | Re-index periodically. `0` means only at startup and on `POST /api/library/rescan`.                                                             |
+| Variable                  | Default            | Purpose                                                                                                            |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `KARAOKEJ_LIBRARY`        | (required)         | Folder containing `.kfn` files. Subfolders are fine, and the top-level folder becomes the category.                |
+| `KARAOKEJ_DB`             | `data/karaokej.db` | SQLite index. It's safe to delete: it is rebuilt from the library.                                                 |
+| `PORT`                    | `3000`             | HTTP port.                                                                                                         |
+| `HOST`                    | all interfaces     | Listen address.                                                                                                    |
+| `KARAOKEJ_PUBLIC_URL`     | screen's address   | URL phones should open, used for the QR code. When not set, the QR code uses the address the screen was opened on. |
+| `KARAOKEJ_RESCAN_MINUTES` | `0`                | Re-index periodically. `0` means only at startup and on `POST /api/library/rescan`.                                |
 
 ## Using it
 

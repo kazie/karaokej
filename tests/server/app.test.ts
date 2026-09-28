@@ -31,9 +31,9 @@ describe('REST API', () => {
     expect(health.status).toBe(200)
     expect(await health.json()).toEqual({ ok: true, db: true, libraryReachable: true })
 
-    const info = (await (await get('/api/info')).json()) as ServerInfo
-    expect(info).toMatchObject({ publicUrl: 'http://karaoke.local', songCount: 2, scan: { running: false } })
-    expect(Array.isArray(info.lanAddresses)).toBe(true)
+    expect((await (await get('/api/info')).json()) as ServerInfo).toEqual({
+      publicUrl: 'http://karaoke.local',
+    })
   })
 
   it('searches songs and lists categories', async () => {
