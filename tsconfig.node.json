@@ -10,6 +10,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "histoire.config.ts",
+    "histoire.offline.ts",
     "eslint.config.ts",
     "tsdown.config.ts"
   ]

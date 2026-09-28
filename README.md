@@ -76,6 +76,7 @@ pnpm lint && pnpm format:check && pnpm typecheck
 - `src/shared/protocol.ts`: the REST and WebSocket types
 - `server/`: Hono app, SQLite (`node:sqlite`) with plain SQL migrations, the incremental indexer, and the session reducer
 - `src/views/`: `ScreenView` and `RemoteView`
+- `histoire.offline.ts`: keeps the Histoire UI offline by dropping its Google Fonts import and serving its icons from local `@iconify-json/*` sets instead of the Iconify API
 
 Database changes go in `server/db/migrations.ts` as a new entry. Never edit a released migration.
 
