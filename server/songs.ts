@@ -1,10 +1,12 @@
 import type { CategoryCount, Song, SongPage } from '../src/shared/protocol'
+import { groupCategories, type FolderCount } from '../src/shared/folders'
 import type { Database } from './db/database'
 
 export interface SongRow {
   id: string
   path: string
   category: string
+  subcategory: string
   title: string
   artist: string
   album: string
@@ -18,6 +20,8 @@ export interface SearchOptions {
   q?: string
   /** Omit for all categories; `''` selects songs in the library root. */
   category?: string
+  /** Only with `category`: omit for the whole folder; `''` selects songs directly in it. */
+  subcategory?: string
   offset?: number
   limit?: number
 }
@@ -31,6 +35,7 @@ export function toSong(row: SongRow): Song {
     artist: row.artist,
     album: row.album,
     category: row.category,
+    subcategory: row.subcategory,
     path: row.path,
   }
 }
@@ -69,7 +74,7 @@ export class SongRepository {
     this.countStmt = db.prepare('SELECT count(*) AS n FROM songs')
     this.byIdStmt = db.prepare('SELECT * FROM songs WHERE id = ?')
     this.categoriesStmt = db.prepare(
-      'SELECT category, count(*) AS count FROM songs GROUP BY category ORDER BY category COLLATE NOCASE',
+      'SELECT category, subcategory, count(*) AS count FROM songs GROUP BY category, subcategory',
     )
   }
 
@@ -82,10 +87,10 @@ export class SongRepository {
   }
 
   categories(): CategoryCount[] {
-    return this.categoriesStmt.all() as unknown as CategoryCount[]
+    return groupCategories(this.categoriesStmt.all() as unknown as FolderCount[])
   }
 
-  search({ q = '', category, offset = 0, limit = MAX_PAGE_SIZE }: SearchOptions = {}): SongPage {
+  search({ q = '', category, subcategory, offset = 0, limit = MAX_PAGE_SIZE }: SearchOptions = {}): SongPage {
     limit = Math.max(1, Math.min(MAX_PAGE_SIZE, Math.trunc(limit) || MAX_PAGE_SIZE))
     offset = Math.max(0, Math.trunc(offset) || 0)
     const { match, literals } = parseSearch(q)
@@ -104,6 +109,10 @@ export class SongRepository {
     if (category !== undefined) {
       where.push('s.category = ?')
       params.push(category)
+      if (subcategory !== undefined) {
+        where.push('s.subcategory = ?')
+        params.push(subcategory)
+      }
     }
     const from = match ? 'songs_fts JOIN songs s ON s.rowid = songs_fts.rowid' : 'songs s'
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''

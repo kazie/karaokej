@@ -47,7 +47,7 @@ const item = (id: string): QueueItem => ({
   id,
   addedAt: 0,
   ball: true,
-  song: { id: `s-${id}`, title: id, artist: '', album: '', category: '', path: '' },
+  song: { id: `s-${id}`, title: id, artist: '', album: '', category: '', subcategory: '', path: '' },
 })
 const stateWith = (patch: Partial<SessionState>): SessionState => ({ ...initialState(), ...patch })
 

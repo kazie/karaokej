@@ -21,10 +21,17 @@ describe('searchSongs', () => {
     await searchSongs({ q: '', category: null })
     await searchSongs({ category: '' })
     await searchSongs({ q: 'we are', category: 'Anime', offset: 50 })
+    await searchSongs({ category: 'Anime', subcategory: 'Ghibli' })
+    await searchSongs({ category: 'Anime', subcategory: '' })
+    // A folder without its category means nothing.
+    await searchSongs({ subcategory: 'Ghibli' })
     expect(urls).toEqual([
       '/api/songs?',
       '/api/songs?category=',
       '/api/songs?q=we+are&category=Anime&offset=50',
+      '/api/songs?category=Anime&subcategory=Ghibli',
+      '/api/songs?category=Anime&subcategory=',
+      '/api/songs?',
     ])
   })
 })

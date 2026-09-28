@@ -15,6 +15,8 @@ export function searchSongs(
     q?: string
     /** `null`/omitted for all categories; `''` for songs in the library root. */
     category?: string | null
+    /** Only with a category: `null`/omitted for the whole folder; `''` for songs directly in it. */
+    subcategory?: string | null
     offset?: number
     limit?: number
   },
@@ -22,7 +24,10 @@ export function searchSongs(
 ): Promise<SongPage> {
   const query = new URLSearchParams()
   if (params.q) query.set('q', params.q)
-  if (params.category != null) query.set('category', params.category)
+  if (params.category != null) {
+    query.set('category', params.category)
+    if (params.subcategory != null) query.set('subcategory', params.subcategory)
+  }
   if (params.offset) query.set('offset', String(params.offset))
   if (params.limit) query.set('limit', String(params.limit))
   return getJson<SongPage>(`/api/songs?${query}`, signal)

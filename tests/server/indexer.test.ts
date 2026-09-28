@@ -46,9 +46,17 @@ describe('Indexer', () => {
 
     expect(songs.byId(songId('root.kfn'))).toMatchObject({ title: 'root', category: '' })
     expect(songs.categories()).toEqual([
-      { category: '', count: 1 },
-      { category: 'Anime', count: 2 },
-      { category: 'Övrigt', count: 2 },
+      { category: '', count: 1, subcategories: [] },
+      {
+        category: 'Anime',
+        count: 2,
+        subcategories: [
+          { subcategory: 'O', count: 1 },
+          { subcategory: 'P', count: 1 },
+        ],
+      },
+      // Only songs directly in the folder: no folders to pick from.
+      { category: 'Övrigt', count: 2, subcategories: [] },
     ])
   })
 
@@ -172,6 +180,23 @@ describe('SongRepository.search', () => {
         expect(songs.search({ q: '%' }).songs.map((s) => s.title)).toEqual(['100% Pure'])
         expect(songs.search({ q: '_' }).songs.map((s) => s.artist)).toEqual(['Some_Artist'])
       })
+  })
+
+  it('filters by subfolder within a category', async () => {
+    lib.write('Anime/Top.kfn', kfnBytes('Top'))
+    await indexer().scan()
+    expect(songs.search({ category: 'Anime', subcategory: 'O' }).songs.map((s) => s.title)).toEqual([
+      'We Are!',
+    ])
+    expect(songs.search({ category: 'Anime', subcategory: '' }).songs.map((s) => s.title)).toEqual(['Top'])
+    expect(songs.search({ category: 'Anime' }).total).toBe(3)
+    // Without a category, a subfolder means nothing.
+    expect(songs.search({ subcategory: 'O' }).total).toBe(6)
+    expect(songs.categories().find((c) => c.category === 'Anime')?.subcategories).toEqual([
+      { subcategory: '', count: 1 },
+      { subcategory: 'O', count: 1 },
+      { subcategory: 'P', count: 1 },
+    ])
   })
 
   it('filters by category and pages results', () => {

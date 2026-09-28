@@ -9,6 +9,7 @@ const song: Song = {
   artist: 'Aurora Lane',
   album: 'Neon Skies',
   category: 'Pop',
+  subcategory: '',
   path: '',
 }
 const state = reactive({ selected: null as Song | null, log: [] as string[] })

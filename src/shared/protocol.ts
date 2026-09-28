@@ -7,6 +7,8 @@ export interface Song {
   album: string
   /** Top-level library folder, e.g. `Anime`. */
   category: string
+  /** The folder below `category`, e.g. `Ghibli`; `''` for songs directly in it. */
+  subcategory: string
   /** Path relative to the library root. */
   path: string
 }
@@ -138,9 +140,17 @@ export interface SongPage {
   limit: number
 }
 
+export interface SubcategoryCount {
+  /** `''` for songs directly in the category folder. */
+  subcategory: string
+  count: number
+}
+
 export interface CategoryCount {
   category: string
   count: number
+  /** Its folders, only when it has any: songs directly in it count as `''`. */
+  subcategories: SubcategoryCount[]
 }
 
 export interface ServerInfo {

@@ -14,6 +14,7 @@ let app: Awaited<ReturnType<typeof createTestApp>>['app']
 beforeAll(async () => {
   lib.write('Anime/We Are.kfn', kfnBytes('We Are!', 'Kitadani Hiroshi'))
   lib.write('Jul/Snow.kfn', kfnBytes('Snow'))
+  lib.write('Jul/Tomte/Bells.kfn', kfnBytes('Bells'))
   writeFileSync(join(staticDir, 'index.html'), '<title>Karaokej</title>')
   ;({ app } = await createTestApp(lib.root, { publicUrl: 'http://karaoke.local', staticDir }))
 })
@@ -41,12 +42,23 @@ describe('REST API', () => {
     expect(page.total).toBe(1)
     expect(page.songs[0]).toMatchObject({ title: 'We Are!', category: 'Anime', path: 'Anime/We Are.kfn' })
     const byCategory = (await (await get('/api/songs?category=Jul')).json()) as SongPage
-    expect(byCategory.songs.map((s) => s.title)).toEqual(['Snow'])
+    expect(byCategory.songs.map((s) => s.title).sort()).toEqual(['Bells', 'Snow'])
+    const bySubfolder = (await (await get('/api/songs?category=Jul&subcategory=Tomte')).json()) as SongPage
+    expect(bySubfolder.songs).toMatchObject([{ title: 'Bells', subcategory: 'Tomte' }])
+    const direct = (await (await get('/api/songs?category=Jul&subcategory=')).json()) as SongPage
+    expect(direct.songs.map((s) => s.title)).toEqual(['Snow'])
     const rootOnly = (await (await get('/api/songs?category=')).json()) as SongPage
     expect(rootOnly.total).toBe(0)
     expect((await (await get('/api/categories')).json()) as CategoryCount[]).toEqual([
-      { category: 'Anime', count: 1 },
-      { category: 'Jul', count: 1 },
+      { category: 'Anime', count: 1, subcategories: [] },
+      {
+        category: 'Jul',
+        count: 2,
+        subcategories: [
+          { subcategory: '', count: 1 },
+          { subcategory: 'Tomte', count: 1 },
+        ],
+      },
     ])
   })
 

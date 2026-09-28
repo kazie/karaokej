@@ -7,7 +7,15 @@ function item(id: string): QueueItem {
     id,
     addedAt: 0,
     ball: true,
-    song: { id: `song-${id}`, title: id, artist: '', album: '', category: '', path: `${id}.kfn` },
+    song: {
+      id: `song-${id}`,
+      title: id,
+      artist: '',
+      album: '',
+      category: '',
+      subcategory: '',
+      path: `${id}.kfn`,
+    },
   }
 }
 

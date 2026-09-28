@@ -5,6 +5,7 @@ import { basename, join, relative, sep } from 'node:path'
 import type { ScanStatus } from '../src/shared/protocol'
 import { KfnTruncatedError, parseKfnHeader } from '../src/kfn/parseKfn'
 import { errorMessage } from '../src/shared/errors'
+import { folderOf } from '../src/shared/folders'
 import { transaction, type Database } from './db/database'
 import { initialScan } from '../src/shared/session'
 import type { SongRepository, SongRow } from './songs'
@@ -103,12 +104,13 @@ async function readMeta(absPath: string) {
 }
 
 export async function indexFile(file: FoundFile, now = Date.now()): Promise<SongRow> {
-  const category = file.path.includes('/') ? file.path.slice(0, file.path.indexOf('/')) : ''
+  const { category, subcategory } = folderOf(file.path)
   const fallbackTitle = basename(file.path).replace(/\.kfn$/i, '')
   const base = {
     id: songId(file.path),
     path: file.path,
     category,
+    subcategory,
     size: file.size,
     mtime_ms: file.mtimeMs,
     indexed_at: now,
@@ -210,10 +212,11 @@ export class Indexer {
       this.update({ done })
 
       const upsert = db.prepare(`
-        INSERT INTO songs (id, path, category, title, artist, album, size, mtime_ms, indexed_at, error)
-        VALUES (:id, :path, :category, :title, :artist, :album, :size, :mtime_ms, :indexed_at, :error)
+        INSERT INTO songs (id, path, category, subcategory, title, artist, album, size, mtime_ms, indexed_at, error)
+        VALUES (:id, :path, :category, :subcategory, :title, :artist, :album, :size, :mtime_ms, :indexed_at, :error)
         ON CONFLICT (path) DO UPDATE SET
-          category = excluded.category, title = excluded.title, artist = excluded.artist,
+          category = excluded.category, subcategory = excluded.subcategory,
+          title = excluded.title, artist = excluded.artist,
           album = excluded.album, size = excluded.size, mtime_ms = excluded.mtime_ms,
           indexed_at = excluded.indexed_at, error = excluded.error`)
       // Read headers in parallel one chunk at a time, then write each chunk in a single transaction.

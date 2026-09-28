@@ -12,6 +12,7 @@ import type {
   Song,
   SongPage,
 } from '../shared/protocol'
+import { folderOf, groupCategories, type FolderCount } from '../shared/folders'
 import { initialScan, initialState, reduce, type SessionAction } from '../shared/session'
 import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
 
@@ -39,18 +40,23 @@ function makeCatalog(): Song[] {
   ]
   const nouns = ['Dreams', 'Lights', 'Road', 'Heart', 'Parade', 'Skies', 'Rain', 'Nights', 'Waltz', 'Signal']
   const categories = ['Anime', 'Games', 'Musicals', 'Pop', '']
+  /** Folders below each category; `''` puts some songs directly in the category folder. */
+  const subfolders: Record<string, string[]> = { Anime: ['Ghibli', 'Shows', ''], Games: ['Nintendo', ''] }
   const songs: Song[] = []
   for (let i = 0; i < 64; i++) {
     // Every word/noun pair once, so titles are unique.
     const title = `${words[i % words.length]} ${nouns[Math.floor(i / words.length) % nouns.length]}${i % 9 === 4 ? ' & Friends' : ''}`
-    const category = categories[i % categories.length]!
+    const top = categories[i % categories.length]!
+    const subs = subfolders[top] ?? ['']
+    const folder = [top, subs[Math.floor(i / categories.length) % subs.length]].filter(Boolean).join('/')
+    const path = `${folder ? `${folder}/` : ''}${title}.kfn`
     songs.push({
       id: `song-${i}`,
       title,
       artist: artists[i % artists.length]!,
       album: i % 4 === 0 ? `Album ${1 + (i % 5)}` : '',
-      category,
-      path: `${category ? `${category}/` : ''}${title}.kfn`,
+      ...folderOf(path),
+      path,
     })
   }
   return songs
@@ -155,15 +161,30 @@ export function createFakeBackend(options: FakeBackendOptions = {}) {
 
   const services: KaraokeServices = {
     connect,
-    async searchSongs({ q = '', category = null, offset = 0, limit = 50 }): Promise<SongPage> {
+    async searchSongs({
+      q = '',
+      category = null,
+      subcategory = null,
+      offset = 0,
+      limit = 50,
+    }): Promise<SongPage> {
       await delay(latency)
-      const hits = songs.filter((s) => (category == null || s.category === category) && matches(s, q))
+      const inFolder = (s: Song) =>
+        category == null ||
+        (s.category === category && (subcategory == null || s.subcategory === subcategory))
+      const hits = songs.filter((s) => inFolder(s) && matches(s, q))
       return { songs: hits.slice(offset, offset + limit), total: hits.length, offset, limit }
     },
     async getCategories(): Promise<CategoryCount[]> {
-      const counts = new Map<string, number>()
-      for (const s of songs) counts.set(s.category, (counts.get(s.category) ?? 0) + 1)
-      return [...counts].map(([category, count]) => ({ category, count }))
+      const counts = new Map<string, FolderCount>()
+      for (const { category, subcategory } of songs) {
+        // Folder names can't contain '/', so the key is unique per pair.
+        const key = `${category}/${subcategory}`
+        const row = counts.get(key) ?? { category, subcategory, count: 0 }
+        counts.set(key, row)
+        row.count++
+      }
+      return groupCategories([...counts.values()])
     },
     async getInfo(): Promise<ServerInfo> {
       return { publicUrl: 'http://karaokej.local:3000' }
