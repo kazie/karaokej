@@ -17,7 +17,6 @@
     "test:watch": "vitest",
     "story:dev": "histoire dev",
     "story:build": "histoire build",
-    "story:preview": "histoire preview",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "dev:web": "vite",
