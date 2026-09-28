@@ -5,12 +5,13 @@ import { loadConfig } from './config'
 import { openDb } from './db/database'
 import { SessionHub } from './hub'
 import { Indexer } from './indexer'
+import { SettingsRepository } from './settings'
 import { SongRepository } from './songs'
 
 const config = loadConfig()
 const db = openDb(config.dbPath)
 const songs = new SongRepository(db)
-const hub = new SessionHub(songs)
+const hub = new SessionHub(songs, { settings: new SettingsRepository(db) })
 const indexer = new Indexer({ db, songs, root: config.libraryRoot, onStatus: (s) => hub.setScan(s) })
 
 const app = createApp({ ...config, db, songs, indexer, hub, staticDir: config.staticDir })

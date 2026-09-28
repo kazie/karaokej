@@ -7,6 +7,8 @@ export interface Song {
   album: string
   /** Top-level library folder, e.g. `Anime`. */
   category: string
+  /** The folder below `category`, e.g. `Ghibli`; `''` for songs directly in it. */
+  subcategory: string
   /** Path relative to the library root. */
   path: string
 }
@@ -33,10 +35,21 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 /** A request before the session numbers it. */
 export type NewPlaybackRequest = DistributiveOmit<PlaybackRequest, 'seq'>
 
+/** How the sung color fills the lyrics: a smooth wipe, or whole syllables at once. */
+export type HighlightMode = 'wipe' | 'instant'
+export const HIGHLIGHT_MODES: readonly HighlightMode[] = ['wipe', 'instant']
+
 export interface SessionSettings {
   /** Skip long intros and interludes automatically, to the countdown. */
   autoSkipInterludes: boolean
+  /** Show a verse's lines this long before they are sung; 0 shows them all the time. */
+  leadInMs: LeadInStep
+  highlight: HighlightMode
 }
+
+/** Lead-in times offered on the remote (0: always show the lyrics). */
+export const LEAD_IN_STEPS = [0, 2000, 3000, 5000, 8000] as const
+export type LeadInStep = (typeof LEAD_IN_STEPS)[number]
 
 /** Playback speeds offered on the remote. */
 export const SPEED_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2] as const
@@ -93,6 +106,8 @@ export type RemoteCommand =
   | { type: 'skipInterlude' }
   | { type: 'setSpeed'; rate: number }
   | { type: 'setAutoSkip'; enabled: boolean }
+  | { type: 'setLeadIn'; ms: number }
+  | { type: 'setHighlight'; mode: HighlightMode }
   | { type: 'setBall'; itemId: string; enabled: boolean }
 
 /** Playback reports only screens may send. */
@@ -125,9 +140,17 @@ export interface SongPage {
   limit: number
 }
 
+export interface SubcategoryCount {
+  /** `''` for songs directly in the category folder. */
+  subcategory: string
+  count: number
+}
+
 export interface CategoryCount {
   category: string
   count: number
+  /** Its folders, only when it has any: songs directly in it count as `''`. */
+  subcategories: SubcategoryCount[]
 }
 
 export interface ServerInfo {

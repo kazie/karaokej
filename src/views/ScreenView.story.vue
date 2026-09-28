@@ -36,7 +36,7 @@ const party = createFakeBackend()
       <template #controls>
         <p class="note">
           Both share one fake server. Press Start on the screen, then queue songs, pause or skip from the
-          phone.
+          phone. Songs ending in “&amp; Friends” are duets; try the lyrics settings under ⚙ with one.
         </p>
         <HstCheckbox v-model="party.connected.value" title="Network up" />
       </template>

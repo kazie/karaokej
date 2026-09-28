@@ -63,6 +63,7 @@ export function createApp(deps: AppDeps): Hono {
       songs.search({
         q: c.req.query('q'),
         category: c.req.query('category'),
+        subcategory: c.req.query('subcategory'),
         // Missing or invalid values fall back to the repository's defaults.
         offset: Number(c.req.query('offset')),
         limit: Number(c.req.query('limit')),

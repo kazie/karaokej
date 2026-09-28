@@ -142,3 +142,45 @@ export function gapAt(gaps: readonly Gap[], timeMs: number): Gap | null {
 
 /** When the 3-2-1 countdown before the end of `gap` starts. */
 export const countdownStart = (gap: Gap) => gap.endMs - COUNTDOWN_MS
+
+/** When a line is on screen: from a while before its verse is sung until just after. */
+export interface ShowWindow {
+  showFrom: number
+  hideAfter: number
+}
+
+/** Pauses shorter than the lead-in plus this keep a verse together, so lines never blink off briefly. */
+const MIN_HIDDEN_MS = 1000
+/** How long a verse stays up after its last syllable. */
+const LINGER_MS = 1000
+
+const ALWAYS: ShowWindow = { showFrom: -Infinity, hideAfter: Infinity }
+
+/**
+ * Each line's {@link ShowWindow}, by line index. Lines are grouped into verses
+ * split at pauses of at least `leadMs` + {@link MIN_HIDDEN_MS}; a verse shows
+ * `leadMs` before it starts and {@link LINGER_MS} after it ends. Blank and
+ * unsynced lines go with the verse before them. `leadMs` 0 shows every line
+ * all the time. Compute once per track.
+ */
+export function lineWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
+  if (leadMs <= 0) return timeline.lines.map(() => ALWAYS)
+  let verse: ShowWindow | null = null
+  let verseEnd = -Infinity
+  const windows = timeline.lines.map((line) => {
+    if (!line.syllables.length || !Number.isFinite(line.start)) return verse
+    if (!verse || line.start - verseEnd >= leadMs + MIN_HIDDEN_MS) {
+      verse = { showFrom: line.start - leadMs, hideAfter: 0 }
+      verseEnd = -Infinity
+    }
+    verseEnd = Math.max(verseEnd, line.end)
+    verse.hideAfter = verseEnd + LINGER_MS
+    return verse
+  })
+  // Blank lines before the first verse go with it.
+  const first = windows.find((w) => w !== null) ?? ALWAYS
+  return windows.map((w) => w ?? first)
+}
+
+export const shownAt = (window: ShowWindow, timeMs: number): boolean =>
+  timeMs >= window.showFrom && timeMs < window.hideAfter

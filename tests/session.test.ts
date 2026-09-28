@@ -7,7 +7,15 @@ function item(id: string): QueueItem {
     id,
     addedAt: 0,
     ball: true,
-    song: { id: `song-${id}`, title: id, artist: '', album: '', category: '', path: `${id}.kfn` },
+    song: {
+      id: `song-${id}`,
+      title: id,
+      artist: '',
+      album: '',
+      category: '',
+      subcategory: '',
+      path: `${id}.kfn`,
+    },
   }
 }
 
@@ -150,5 +158,15 @@ describe('playback controls', () => {
     s = reduce(s, { type: 'setAutoSkip', enabled: true })
     expect(s.settings.autoSkipInterludes).toBe(true)
     expect(reduce(s, { type: 'setAutoSkip', enabled: true })).toBe(s)
+  })
+
+  it('snaps the lead-in to an offered step and switches the highlight mode', () => {
+    let s = reduce(initialState(), { type: 'setLeadIn', ms: 4900 })
+    expect(s.settings.leadInMs).toBe(5000)
+    expect(reduce(s, { type: 'setLeadIn', ms: 5000 })).toBe(s)
+    expect(reduce(s, { type: 'setLeadIn', ms: -50 }).settings.leadInMs).toBe(0)
+    s = reduce(s, { type: 'setHighlight', mode: 'instant' })
+    expect(s.settings.highlight).toBe('instant')
+    expect(reduce(s, { type: 'setHighlight', mode: 'instant' })).toBe(s)
   })
 })

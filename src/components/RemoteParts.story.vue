@@ -12,6 +12,7 @@ const song = (id: string, title: string, artist: string, album = ''): Song => ({
   artist,
   album,
   category: 'Demo',
+  subcategory: '',
   path: '',
 })
 const songs = Array.from({ length: 12 }, (_, i) =>

@@ -40,4 +40,19 @@ export const MIGRATIONS: readonly string[] = [
     VALUES (new.rowid, new.title, new.artist, new.album, new.path);
   END;
   `,
+  /* 2: session settings, one JSON value per key */ `
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
+  /* 3: second-level folder, backfilled from the path */ `
+  ALTER TABLE songs ADD COLUMN subcategory TEXT NOT NULL DEFAULT '';
+  -- Only nested songs change; the rest keep the default ''. Same rule as folderOf in src/shared/folders.ts.
+  UPDATE songs
+    SET subcategory = (SELECT substr(rest, 1, instr(rest, '/') - 1) FROM (SELECT substr(path, instr(path, '/') + 1) AS rest))
+    WHERE path GLOB '*/*/*';
+  CREATE INDEX songs_by_subcategory
+    ON songs (category, subcategory, artist COLLATE NOCASE, title COLLATE NOCASE);
+  `,
 ]

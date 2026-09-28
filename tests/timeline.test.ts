@@ -4,7 +4,9 @@ import {
   buildGaps,
   gapAt,
   focusLineIndex,
+  lineWindows,
   MAX_TRAILING_SYLLABLE_MS,
+  shownAt,
   splitSyllables,
   syllableProgress,
 } from '../src/kfn/timeline'
@@ -114,5 +116,45 @@ describe('buildGaps / gapAt', () => {
   it('handles songs without lyrics', () => {
     expect(findGap([buildTimeline(lyrics([], []))], 0)).toBeNull()
     expect(findGap([], 0)).toBeNull()
+  })
+})
+
+describe('lineWindows / shownAt', () => {
+  // Lines: a b 1.0–3.0 s, then c 12.0–13.5 s and d 14.0–15.5 s.
+  const t = buildTimeline(lyrics(['a b', 'c', 'd'], [100, 150, 1200, 1400]))
+
+  it('shows a verse from the lead-in before it until a second after it', () => {
+    expect(lineWindows(t, 3000)).toEqual([
+      { showFrom: -2000, hideAfter: 4000 },
+      { showFrom: 9000, hideAfter: 16500 },
+      { showFrom: 9000, hideAfter: 16500 },
+    ])
+  })
+
+  it('keeps lines together across pauses too short to be worth hiding', () => {
+    const [first, second] = lineWindows(t, 8500)
+    expect(second).toBe(first)
+    expect(first).toEqual({ showFrom: -7500, hideAfter: 16500 })
+  })
+
+  it('hides lines outside their window', () => {
+    const windows = lineWindows(t, 3000)
+    expect(shownAt(windows[1]!, 8999)).toBe(false)
+    expect(shownAt(windows[1]!, 9000)).toBe(true)
+    expect(shownAt(windows[0]!, 3999)).toBe(true)
+    expect(shownAt(windows[0]!, 4000)).toBe(false)
+  })
+
+  it('shows every line all the time without a lead-in', () => {
+    for (const w of lineWindows(t, 0)) expect(shownAt(w, 1e9) && shownAt(w, -1e9)).toBe(true)
+  })
+
+  it('puts blank and unsynced lines with the verse before them', () => {
+    const b = buildTimeline(lyrics(['', 'a', '', 'b', 'c'], [100, 2000]))
+    const [lead, a, blank, bLine, unsynced] = lineWindows(b, 3000)
+    expect(lead).toBe(a)
+    expect(blank).toBe(a)
+    expect(unsynced).toBe(bLine)
+    expect(bLine).not.toBe(a)
   })
 })

@@ -4,6 +4,7 @@ import ServicesProvider from '../demo/ServicesProvider.vue'
 import { createFakeBackend } from '../demo/fakeBackend'
 
 const busy = createFakeBackend({ queued: [3, 10, 21, 30] })
+const folders = createFakeBackend({ queued: [3] })
 const empty = createFakeBackend()
 const noScreen = createFakeBackend({ screens: 0, queued: [5] })
 const offline = createFakeBackend({ queued: [3, 10], connected: false })
@@ -18,10 +19,23 @@ const indexing = createFakeBackend({ scan: { running: true, done: 812, total: 22
       </div>
       <template #controls>
         <p class="note">
-          Search (try “cafe”, “&amp;” or “mika &amp;”), filter by category, tap a song to queue it, then check
-          the Queue tab. Playback buttons act on the shared queue.
+          Search (try “cafe”, “&amp;” or “mika &amp;”), filter by category (pick Anime, then a folder such as
+          Ghibli), tap a song to queue it, then check the Queue tab. Playback buttons act on the shared queue.
         </p>
         <HstCheckbox v-model="busy.connected.value" title="Connected" />
+      </template>
+    </Variant>
+    <Variant title="Category with subfolders">
+      <div class="phone">
+        <ServicesProvider :services="folders.services"
+          ><RemoteView initial-category="Anime"
+        /></ServicesProvider>
+      </div>
+      <template #controls>
+        <p class="note">
+          Anime has the folders Ghibli and Shows, plus songs directly in it (“Other”). The folder row only
+          shows for categories that have folders; try Pop to see it go away.
+        </p>
       </template>
     </Variant>
     <Variant title="Nothing queued yet">

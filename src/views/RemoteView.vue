@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import AddSongDialog from '../components/AddSongDialog.vue'
-import ChipScroller from '../components/ChipScroller.vue'
+import ChipFilter from '../components/ChipFilter.vue'
 import NowPlayingBar from '../components/NowPlayingBar.vue'
 import QueueList from '../components/QueueList.vue'
 import SongList from '../components/SongList.vue'
 import { useServices } from '../services'
 import { errorMessage, isAbortError } from '../shared/errors'
-import type { CategoryCount, ClientCommand, Song } from '../shared/protocol'
+import {
+  LEAD_IN_STEPS,
+  type CategoryCount,
+  type ClientCommand,
+  type HighlightMode,
+  type Song,
+} from '../shared/protocol'
+
+const props = defineProps<{
+  /** Category chip selected at first (`''` = the library root); all categories when omitted. */
+  initialCategory?: string
+}>()
 
 const { connect, searchSongs, getCategories } = useServices()
 const { state, connected, error, send, reconnectNow } = connect('remote')
@@ -15,8 +26,18 @@ const { state, connected, error, send, reconnectNow } = connect('remote')
 const tab = ref<'search' | 'queue'>('search')
 const query = ref('')
 /** `null` = all categories; `''` = songs in the library root. */
-const category = ref<string | null>(null)
+const category = ref<string | null>(props.initialCategory ?? null)
 const categories = shallowRef<CategoryCount[]>([])
+/** Within `category`: `null` = the whole folder; `''` = songs directly in it. */
+const subcategory = ref<string | null>(null)
+const categoryOptions = computed(() => categories.value.map((c) => ({ value: c.category, count: c.count })))
+/** The selected category's subfolders; empty when it has none (or no category is selected). */
+const subcategoryOptions = computed(() =>
+  (categories.value.find((c) => c.category === category.value)?.subcategories ?? []).map((s) => ({
+    value: s.subcategory,
+    count: s.count,
+  })),
+)
 const songs = shallowRef<Song[]>([])
 const total = ref(0)
 const loading = ref(false)
@@ -37,7 +58,12 @@ async function load(reset: boolean): Promise<void> {
   loading.value = true
   try {
     const page = await searchSongs(
-      { q: query.value, category: category.value, offset: reset ? 0 : songs.value.length },
+      {
+        q: query.value,
+        category: category.value,
+        subcategory: subcategory.value,
+        offset: reset ? 0 : songs.value.length,
+      },
       current.signal,
     )
     songs.value = reset ? page.songs : [...songs.value, ...page.songs]
@@ -54,11 +80,38 @@ watch(query, () => {
   clearTimeout(debounce)
   debounce = setTimeout(() => load(true), 250)
 })
-watch(category, () => load(true))
+// Both change together when picking a category, and load once.
+watch([category, subcategory], () => load(true))
 
-onMounted(async () => {
+function pickCategory(value: string | null): void {
+  category.value = value
+  subcategory.value = null
+}
+
+/**
+ * Reload the category chips. A rescan can remove the chosen category or
+ * folder; the choice is then dropped rather than filtering on a chip that is
+ * gone. Returns whether it was dropped (which reloads the songs).
+ */
+async function refreshCategories(): Promise<boolean> {
+  const next = await getCategories().catch(() => null)
+  if (!next) return false
+  categories.value = next
+  const chosen = next.find((c) => c.category === category.value)
+  if (category.value !== null && !chosen) {
+    pickCategory(null)
+    return true
+  }
+  if (subcategory.value !== null && !chosen?.subcategories.some((s) => s.subcategory === subcategory.value)) {
+    subcategory.value = null
+    return true
+  }
+  return false
+}
+
+onMounted(() => {
   load(true)
-  categories.value = await getCategories().catch(() => [])
+  void refreshCategories()
 })
 
 // Refresh the catalog when an index scan finishes.
@@ -67,11 +120,9 @@ watch(
   (finished, previous) => {
     // `previous` is undefined until the first state arrives, and null before any scan finished.
     if (finished && previous !== undefined && finished !== previous) {
-      load(true)
-      getCategories().then(
-        (c) => (categories.value = c),
-        () => {},
-      )
+      void refreshCategories().then((dropped) => {
+        if (!dropped) void load(true)
+      })
     }
   },
 )
@@ -103,6 +154,20 @@ function toggleAutoSkip(event: Event): void {
     box.checked = !!state.value?.settings.autoSkipInterludes
 }
 
+const leadInLabel = (ms: number) => (ms ? `${ms / 1000} s before` : 'Always')
+
+function changeLeadIn(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (!command({ type: 'setLeadIn', ms: Number(select.value) }))
+    select.value = String(state.value?.settings.leadInMs ?? '')
+}
+
+function changeHighlight(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (!command({ type: 'setHighlight', mode: select.value as HighlightMode }))
+    select.value = state.value?.settings.highlight ?? ''
+}
+
 function addSelected(singer: string, ball: boolean): void {
   if (!selected.value) return
   // On failure the dialog stays open so the user can retry once reconnected.
@@ -132,8 +197,22 @@ function addSelected(singer: string, ball: boolean): void {
     <section v-if="showSettings && state" class="settings" aria-label="Settings">
       <label>
         <input type="checkbox" :checked="state.settings.autoSkipInterludes" @change="toggleAutoSkip" />
-        Auto-skip long intros and interludes (for everyone)
+        Auto-skip long intros and interludes
       </label>
+      <label>
+        Show lyrics
+        <select :value="state.settings.leadInMs" @change="changeLeadIn">
+          <option v-for="ms in LEAD_IN_STEPS" :key="ms" :value="ms">{{ leadInLabel(ms) }}</option>
+        </select>
+      </label>
+      <label>
+        Highlight
+        <select :value="state.settings.highlight" @change="changeHighlight">
+          <option value="wipe">Sliding</option>
+          <option value="instant">Whole syllables</option>
+        </select>
+      </label>
+      <p class="settings-note">These settings apply for everyone.</p>
     </section>
 
     <p v-if="state && !connected" class="banner warning" role="status">Reconnecting to the karaoke server…</p>
@@ -164,28 +243,24 @@ function addSelected(singer: string, ball: boolean): void {
           aria-label="Search songs"
           enterkeyhint="search"
         />
-        <ChipScroller label="Category" prev-label="Previous categories" next-label="Next categories">
-          <button
-            type="button"
-            role="radio"
-            class="chip"
-            :aria-checked="category === null"
-            @click="category = null"
-          >
-            All
-          </button>
-          <button
-            v-for="c in categories"
-            :key="c.category"
-            type="button"
-            role="radio"
-            class="chip"
-            :aria-checked="category === c.category"
-            @click="category = c.category"
-          >
-            {{ c.category || 'Other' }} <span class="count">{{ c.count }}</span>
-          </button>
-        </ChipScroller>
+        <ChipFilter
+          :model-value="category"
+          label="Category"
+          prev-label="Previous categories"
+          next-label="Next categories"
+          :options="categoryOptions"
+          @update:model-value="pickCategory"
+        />
+        <ChipFilter
+          v-if="subcategoryOptions.length"
+          v-model="subcategory"
+          class="subfolders"
+          compact
+          :label="`Folders in ${category}`"
+          prev-label="Previous folders"
+          next-label="Next folders"
+          :options="subcategoryOptions"
+        />
         <p class="total">{{ total }} songs</p>
         <SongList
           :songs="songs"
@@ -291,10 +366,30 @@ h1 span {
   cursor: pointer;
 }
 
+.settings label + label {
+  margin-top: 0.6rem;
+}
+
 .settings input {
   width: 1.1rem;
   height: 1.1rem;
   accent-color: var(--accent);
+}
+
+.settings select {
+  margin-left: auto;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--surface-2);
+  border-radius: calc(var(--radius) / 2);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-note {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .conn {
@@ -371,25 +466,9 @@ h1 span {
   font-size: max(16px, 1rem);
 }
 
-.chip {
-  flex: none;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--surface-2);
-  border-radius: 999px;
-  background: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.chip[aria-checked='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.count {
-  opacity: 0.6;
-  font-size: 0.85em;
+/* The folder row sits close under the category row it narrows down. */
+.subfolders {
+  margin-top: -0.35rem;
 }
 
 .total {

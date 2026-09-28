@@ -8,6 +8,7 @@ const song = (id: string, title: string, artist: string) => ({
   artist,
   album: '',
   category: 'Demo',
+  subcategory: '',
   path: '',
 })
 const queue: QueueItem[] = [

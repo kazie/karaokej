@@ -151,6 +151,8 @@ onBeforeUnmount(() => {
       :playback-rate="state.playbackRate"
       :auto-skip="state.settings.autoSkipInterludes"
       :ball="current?.ball !== false"
+      :lead-in-ms="state.settings.leadInMs"
+      :highlight="state.settings.highlight"
       @ready="onReady"
       @progress="onProgress"
       @ended="onEnded"
