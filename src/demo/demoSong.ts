@@ -7,7 +7,8 @@ export const DEMO_TEXTS = [
   'This is the de/mo song',
   'Each syl/la/ble lights up in time',
   '',
-  'Lines scroll up/ward as they are sung',
+  // `_` joins two words into one syllable, shown with a space.
+  'Lines scroll up/ward as_they are sung',
   'The next line waits be/low',
   '',
   'Scan the code to add a song',

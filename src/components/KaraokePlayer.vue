@@ -7,7 +7,7 @@ import { entryBlob, type KaraokeSong } from '../kfn/song'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { useObjectUrl } from '../composables/useObjectUrl'
 import { buildGaps, countdownStart, gapAt, type Gap } from '../kfn/timeline'
-import type { HighlightMode, PlaybackRequest } from '../shared/protocol'
+import type { HighlightMode, OutlineWidth, PlaybackRequest } from '../shared/protocol'
 import { errorMessage, isAbortError } from '../shared/errors'
 
 const props = withDefaults(
@@ -25,6 +25,7 @@ const props = withDefaults(
     /** Show a verse this long (ms) before it is sung; 0 shows the lyrics all the time. */
     leadInMs?: number
     highlight?: HighlightMode
+    outline?: OutlineWidth
     /** Show the native audio controls (for stories and local testing). */
     controls?: boolean
   }>(),
@@ -36,6 +37,7 @@ const props = withDefaults(
     ball: true,
     leadInMs: 0,
     highlight: 'wipe',
+    outline: 'normal',
     controls: false,
   },
 )
@@ -241,6 +243,7 @@ defineExpose({ play })
           :ball="ball"
           :lead-in-ms="leadInMs"
           :highlight="highlight"
+          :outline="outline"
         />
       </div>
       <InterludeOverlay :gap="gap" :clock="clock" :color="sungColor" />

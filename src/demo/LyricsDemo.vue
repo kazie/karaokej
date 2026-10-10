@@ -5,7 +5,7 @@ import { still } from '../kfn/effects'
 import type { LyricsStyle } from '../kfn/parseSongIni'
 import { parseKfn } from '../kfn/parseKfn'
 import { loadSong, type LyricsTrack } from '../kfn/song'
-import type { HighlightMode } from '../shared/protocol'
+import type { HighlightMode, OutlineWidth } from '../shared/protocol'
 import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
 
 /**
@@ -24,6 +24,7 @@ const props = withDefaults(
     ball?: boolean
     leadInMs?: number
     highlight?: HighlightMode
+    outline?: OutlineWidth
     /** The duet demo instead: one band per singer, as on the player. */
     duet?: boolean
   }>(),
@@ -36,6 +37,7 @@ const props = withDefaults(
     ball: true,
     leadInMs: 0,
     highlight: 'wipe',
+    outline: 'normal',
     duet: false,
   },
 )
@@ -109,6 +111,7 @@ defineExpose({ duration })
       :ball="ball"
       :lead-in-ms="leadInMs"
       :highlight="highlight"
+      :outline="outline"
     />
   </div>
 </template>

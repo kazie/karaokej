@@ -24,11 +24,17 @@ export interface Timeline {
 /** Longest wipe for the last syllable of a line before a pause. */
 export const MAX_TRAILING_SYLLABLE_MS = 1500
 
-/** Split a KaraFun lyric line into syllables: spaces separate words, `/` separates syllables. */
+/**
+ * Split a KaraFun lyric line into syllables: spaces separate words, `/`
+ * separates syllables, and `_` joins words into one syllable (shown as a space).
+ */
 export function splitSyllables(line: string): string[] {
   const words = line.split(' ').filter((w) => w !== '')
   return words.flatMap((word, wi) => {
-    const parts = word.split('/').filter((p) => p !== '')
+    const parts = word
+      .split('/')
+      .filter((p) => p !== '')
+      .map((p) => p.replaceAll('_', ' '))
     if (wi < words.length - 1 && parts.length) parts[parts.length - 1] += ' '
     return parts
   })

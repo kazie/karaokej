@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { songIniText } from '../src/kfn/buildKfn'
-import { kfnColor, parseAnimation, parseIni, parseSongIni } from '../src/kfn/parseSongIni'
+import {
+  DEFAULT_FRAME_WIDTH,
+  frameWidth,
+  kfnColor,
+  parseAnimation,
+  parseIni,
+  parseSongIni,
+} from '../src/kfn/parseSongIni'
 
 describe('parseIni', () => {
   it('parses sections and keeps value whitespace', () => {
@@ -61,6 +68,14 @@ describe('parseSongIni', () => {
       trajectory: 'PlainBottomToTop',
       activeColor: 'rgb(31 106 182)',
     })
+  })
+
+  it('reads the outline thickness from FrameType', () => {
+    expect(frameWidth('Frame3')).toBe(3)
+    expect(frameWidth('Frame2')).toBe(2)
+    expect(frameWidth('NoFrame')).toBe(0)
+    expect(frameWidth(undefined)).toBe(DEFAULT_FRAME_WIDTH)
+    expect(frameWidth('Shadow')).toBe(DEFAULT_FRAME_WIDTH)
   })
 
   it('treats Enabled=0 as disabled and unknown effects as other', () => {

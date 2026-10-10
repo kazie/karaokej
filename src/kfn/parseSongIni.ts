@@ -27,6 +27,8 @@ export interface LyricsStyle {
   inactiveColor: string
   frameColor: string
   inactiveFrameColor: string
+  /** Outline thickness level from `FrameType=FrameN` (0: no outline). */
+  frameWidth: number
   alignment: 'left' | 'center' | 'right'
   trajectory: string
 }
@@ -158,6 +160,17 @@ function numberedValues(section: IniSection, prefix: string): string[] {
   return out
 }
 
+/** Outline level for files without a (known) `FrameType`. */
+export const DEFAULT_FRAME_WIDTH = 2
+
+/** `FrameType`: `Frame3` → 3, `NoFrame` → 0. */
+export function frameWidth(value: string | undefined): number {
+  const v = value?.trim() ?? ''
+  if (/^noframe$/i.test(v)) return 0
+  const m = /^frame(\d+)$/i.exec(v)
+  return m ? parseInt(m[1]!, 10) : DEFAULT_FRAME_WIDTH
+}
+
 function parseStyle(s: IniSection): LyricsStyle {
   const [fontFamily = 'Arial', size = '18'] = (s.get('Font') ?? '').split('*')
   const align = (s.get('Alignment') ?? 'Center').toLowerCase()
@@ -168,6 +181,7 @@ function parseStyle(s: IniSection): LyricsStyle {
     inactiveColor: kfnColor(s.get('InactiveColor'), 'rgb(255 255 255)'),
     frameColor: kfnColor(s.get('FrameColor'), 'rgb(0 0 0)'),
     inactiveFrameColor: kfnColor(s.get('InactiveFrameColor'), 'rgb(0 0 0)'),
+    frameWidth: frameWidth(s.get('FrameType')),
     alignment: align === 'left' || align === 'right' ? align : 'center',
     trajectory: (s.get('Trajectory') ?? '').split('*')[0] ?? '',
   }

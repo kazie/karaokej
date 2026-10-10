@@ -12,6 +12,7 @@ import {
   type CategoryCount,
   type ClientCommand,
   type HighlightMode,
+  type OutlineWidth,
   type Song,
 } from '../shared/protocol'
 
@@ -168,6 +169,12 @@ function changeHighlight(event: Event): void {
     select.value = state.value?.settings.highlight ?? ''
 }
 
+function changeOutline(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (!command({ type: 'setOutline', width: select.value as OutlineWidth }))
+    select.value = state.value?.settings.outline ?? ''
+}
+
 function addSelected(singer: string, ball: boolean): void {
   if (!selected.value) return
   // On failure the dialog stays open so the user can retry once reconnected.
@@ -210,6 +217,15 @@ function addSelected(singer: string, ball: boolean): void {
         <select :value="state.settings.highlight" @change="changeHighlight">
           <option value="wipe">Sliding</option>
           <option value="instant">Whole syllables</option>
+        </select>
+      </label>
+      <label>
+        Text outline
+        <select :value="state.settings.outline" @change="changeOutline">
+          <option value="thin">Thin</option>
+          <option value="normal">Normal</option>
+          <option value="thick">Thick</option>
+          <option value="extra">Extra thick</option>
         </select>
       </label>
       <p class="settings-note">These settings apply for everyone.</p>

@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import {
   HIGHLIGHT_MODES,
+  OUTLINE_WIDTHS,
   MAX_SINGER_LENGTH,
   SCREEN_COMMANDS,
   type ClientCommand,
   type ClientRole,
   type HighlightMode,
+  type OutlineWidth,
   type ScanStatus,
   type ServerMessage,
   type SessionState,
@@ -39,6 +41,10 @@ const num = (v: unknown, field: string): number => {
 const highlightMode = (v: unknown, field: string): HighlightMode => {
   if (!HIGHLIGHT_MODES.includes(v as HighlightMode)) throw new CommandError(`Invalid ${field}`)
   return v as HighlightMode
+}
+const outlineWidth = (v: unknown, field: string): OutlineWidth => {
+  if (!OUTLINE_WIDTHS.includes(v as OutlineWidth)) throw new CommandError(`Invalid ${field}`)
+  return v as OutlineWidth
 }
 /** Validate an optional field: absent is fine, present must pass `check`. */
 const optional = <T>(v: unknown, check: (v: unknown, field: string) => T, field: string): T | undefined =>
@@ -80,6 +86,8 @@ export function parseCommand(raw: string): ClientCommand {
       return { type: 'setLeadIn', ms: num(msg.ms, 'ms') }
     case 'setHighlight':
       return { type: 'setHighlight', mode: highlightMode(msg.mode, 'mode') }
+    case 'setOutline':
+      return { type: 'setOutline', width: outlineWidth(msg.width, 'width') }
     case 'setBall':
       return { type: 'setBall', itemId: str(msg.itemId, 'itemId'), enabled: bool(msg.enabled, 'enabled') }
     case 'ping':

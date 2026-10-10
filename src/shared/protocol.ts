@@ -39,12 +39,17 @@ export type NewPlaybackRequest = DistributiveOmit<PlaybackRequest, 'seq'>
 export type HighlightMode = 'wipe' | 'instant'
 export const HIGHLIGHT_MODES: readonly HighlightMode[] = ['wipe', 'instant']
 
+/** Thickness of the lyrics' outline, relative to what the song asks for. */
+export type OutlineWidth = 'thin' | 'normal' | 'thick' | 'extra'
+export const OUTLINE_WIDTHS: readonly OutlineWidth[] = ['thin', 'normal', 'thick', 'extra']
+
 export interface SessionSettings {
   /** Skip long intros and interludes automatically, to the countdown. */
   autoSkipInterludes: boolean
   /** Show a verse's lines this long before they are sung; 0 shows them all the time. */
   leadInMs: LeadInStep
   highlight: HighlightMode
+  outline: OutlineWidth
 }
 
 /** Lead-in times offered on the remote (0: always show the lyrics). */
@@ -108,6 +113,7 @@ export type RemoteCommand =
   | { type: 'setAutoSkip'; enabled: boolean }
   | { type: 'setLeadIn'; ms: number }
   | { type: 'setHighlight'; mode: HighlightMode }
+  | { type: 'setOutline'; width: OutlineWidth }
   | { type: 'setBall'; itemId: string; enabled: boolean }
 
 /** Playback reports only screens may send. */

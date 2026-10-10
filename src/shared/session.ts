@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   autoSkipInterludes: false,
   leadInMs: 3000,
   highlight: 'wipe',
+  outline: 'normal',
 }
 
 export function initialState(settings: SessionSettings = DEFAULT_SETTINGS): SessionState {
@@ -173,6 +174,10 @@ export function reduce(state: SessionState, action: SessionAction): SessionState
       return action.mode === state.settings.highlight
         ? state
         : { ...state, settings: { ...state.settings, highlight: action.mode } }
+    case 'setOutline':
+      return action.width === state.settings.outline
+        ? state
+        : { ...state, settings: { ...state.settings, outline: action.width } }
     case 'setBall': {
       const current = state.current && setBall(state.current, action.itemId, action.enabled)
       const queue = state.queue.map((i) => setBall(i, action.itemId, action.enabled))

@@ -20,6 +20,12 @@ describe('splitSyllables', () => {
     expect(splitSyllables('  double  space ')).toEqual(['double ', 'space'])
     expect(splitSyllables('')).toEqual([])
   })
+
+  it('joins words linked by underscores into one syllable, shown with a space', () => {
+    expect(splitSyllables('Cru/ci/fied, I_am the')).toEqual(['Cru', 'ci', 'fied, ', 'I am ', 'the'])
+    expect(splitSyllables('sen/ton, and_sweep')).toEqual(['sen', 'ton, ', 'and sweep'])
+    expect(buildTimeline(lyrics(['what_is right'], [100, 200])).warnings).toEqual([])
+  })
 })
 
 describe('buildTimeline', () => {

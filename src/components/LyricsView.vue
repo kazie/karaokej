@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
-import { canvasTranslate, cssTransition, latestFrame, NO_SEL_TEXT_EFFECT } from '../kfn/effects'
-import { ballAt, fillFraction, wipeFront } from '../kfn/wipe'
+import {
+  canvasTranslate,
+  cssTransition,
+  latestFrame,
+  NO_SEL_TEXT_EFFECT,
+  splitAlpha,
+  type SplitColor,
+} from '../kfn/effects'
+import { ballAt, wipeFront } from '../kfn/wipe'
 import type { LyricsTrack } from '../kfn/song'
 import { focusLineIndex, lineWindows, shownAt, syllableProgress, type TimedLine } from '../kfn/timeline'
-import type { HighlightMode } from '../shared/protocol'
+import type { HighlightMode, OutlineWidth } from '../shared/protocol'
 
 /**
  * Scrolling lyrics for one track. Sizes use container query units, so the
@@ -29,8 +36,10 @@ const props = withDefaults(
     leadInMs?: number
     /** Fill the sung color in with a smooth wipe, or a whole syllable at a time. */
     highlight?: HighlightMode
+    /** Outline thickness, relative to the song's own `FrameType`. */
+    outline?: OutlineWidth
   }>(),
-  { fontScale: 0.3, compact: false, ball: false, leadInMs: 0, highlight: 'wipe' },
+  { fontScale: 0.3, compact: false, ball: false, leadInMs: 0, highlight: 'wipe', outline: 'normal' },
 )
 
 const LAYOUT = {
@@ -75,11 +84,24 @@ const windowLines = computed(() => {
   return lines.value.slice(from, focusIndex.value + after + 2)
 })
 
-function outline(color: string): string {
-  const o = '0.045em'
-  return [`${o} 0`, `-${o} 0`, `0 ${o}`, `0 -${o}`]
-    .map((offset) => `drop-shadow(${offset} 0 ${color})`)
-    .join(' ')
+/** Outline thickness per KaraFun `FrameN` level. */
+const OUTLINE_EM_PER_LEVEL = 0.025
+const OUTLINE_SCALE: Record<OutlineWidth, number> = { thin: 0.6, normal: 1, thick: 1.5, extra: 2.2 }
+
+/**
+ * Colors of one layer (sung or unsung text). The layer is drawn opaque and
+ * faded as a whole, so translucent text shows the background, not its own
+ * outline. When the outline is more opaque than the text, the text gets the
+ * difference as its own transparency.
+ */
+function layerPaint(text = 'rgb(255 255 255)', frame = 'rgb(0 0 0)') {
+  const t = splitAlpha(text)
+  const f = splitAlpha(frame)
+  const opacity = Math.max(t.alpha, f.alpha)
+  // Below the max, the color is one of splitAlpha's `rgb(r g b)` (named colors are opaque).
+  const rel = (c: SplitColor) =>
+    c.alpha < opacity ? c.color.replace(/\)$/, ` / ${+(c.alpha / opacity).toFixed(3)})`) : c.color
+  return { text: rel(t), frame: rel(f), opacity }
 }
 
 // Each animated property reads its own keyframe, so the root style below only
@@ -97,14 +119,20 @@ const selEffect = computed(() => selText.value?.value ?? NO_SEL_TEXT_EFFECT)
 const rootStyle = computed(() => {
   const colors = [activeColor.value, inactiveColor.value, frameColor.value, inactiveFrameColor.value]
   const move = latestFrame(offsetX.value, offsetY.value)
+  const sung = layerPaint(activeColor.value?.value, frameColor.value?.value)
+  const unsung = layerPaint(inactiveColor.value?.value, inactiveFrameColor.value?.value)
   return {
     '--font-family': `'${style.value.fontFamily}', Arial, sans-serif`,
     '--font-size': `min(${style.value.fontSize * props.fontScale}cqh, ${style.value.fontSize * props.fontScale * 1.1}cqw)`,
     '--active': activeColor.value?.value,
-    '--inactive': inactiveColor.value?.value,
     '--frame': frameColor.value?.value,
-    '--active-outline': outline(frameColor.value?.value ?? '#000'),
-    '--inactive-outline': outline(inactiveFrameColor.value?.value ?? '#000'),
+    '--sung-text': sung.text,
+    '--sung-frame': sung.frame,
+    '--sung-opacity': sung.opacity,
+    '--unsung-text': unsung.text,
+    '--unsung-frame': unsung.frame,
+    '--unsung-opacity': unsung.opacity,
+    '--outline': `${style.value.frameWidth * OUTLINE_EM_PER_LEVEL * OUTLINE_SCALE[props.outline]}em`,
     '--color-fade': `${latestFrame(...colors)?.transitionMs ?? 0}ms`,
     '--sel-intensity': selEffect.value.intensity,
     '--align': style.value.alignment,
@@ -130,7 +158,9 @@ let observedLayer: Element | null = null
 /** Measure the focus line's syllables; re-measured on line changes, resizes and font loads. */
 function measure(): void {
   const line = focusLine.value
-  const layer = line ? (root.value?.querySelector(`.line[data-index="${line.index}"] .base`) ?? null) : null
+  const layer = line
+    ? (root.value?.querySelector(`.line[data-index="${line.index}"] .base .text`) ?? null)
+    : null
   const els = layer ? [...layer.querySelectorAll<HTMLElement>('.syl')] : []
   const last = els[els.length - 1]
   measured.value =
@@ -195,11 +225,25 @@ function lineState(line: TimedLine): 'past' | 'current' | 'future' {
   return 'future'
 }
 
-function progress(line: TimedLine, si: number): number {
-  if (props.highlight === 'instant') return props.clock() >= line.syllables[si]!.start ? 1 : 0
-  if (line.index === focusIndex.value && front.value !== null && edges.value)
-    return fillFraction(edges.value, front.value, si)
-  return lineState(line) === 'past' ? 1 : 0
+/** Past the end of a line, far enough that the last glyph's outline is not cut off. */
+const ALL_SUNG = 'calc(100% + 0.5em)'
+const NONE_SUNG = '-0.5em'
+
+/**
+ * Where the sung part of `line` ends, as a CSS length from the line's left
+ * edge: the sung layer shows left of it and the unsung layer right of it, so
+ * translucent text never has the other layer under it.
+ */
+function sungUntil(line: TimedLine): string {
+  const state = lineState(line)
+  if (state !== 'current') return state === 'past' ? ALL_SUNG : NONE_SUNG
+  if (line.index !== focusIndex.value || !edges.value) return NONE_SUNG
+  if (props.highlight === 'instant') {
+    const started = line.syllables.filter((s) => props.clock() >= s.start).length
+    if (started === 0) return NONE_SUNG
+    return started === line.syllables.length ? ALL_SUNG : `${edges.value[started]}px`
+  }
+  return front.value === null ? NONE_SUNG : `${front.value}px`
 }
 </script>
 
@@ -217,20 +261,26 @@ function progress(line: TimedLine, si: number): number {
           '--fit': `${MAX_LINE_WIDTH_CQW / Math.max(lineWidthsEm[line.index] ?? 1, 0.01)}cqw`,
         }"
       >
-        <span class="layer base">
-          <span v-for="(syl, si) in line.syllables" :key="si" class="syl" :class="selClass(line, si)">{{
-            syl.text
-          }}</span>
-        </span>
-        <span class="layer fill" aria-hidden="true">
+        <!-- Each layer: an outline copy of the text under the text itself, clipped at the wipe. -->
+        <span
+          v-for="layer in ['base', 'fill']"
+          :key="layer"
+          class="layer"
+          :class="layer"
+          :style="{ '--sung-until': sungUntil(line) }"
+          :aria-hidden="layer === 'fill' || undefined"
+        >
           <span
-            v-for="(syl, si) in line.syllables"
-            :key="si"
-            class="syl"
-            :class="selClass(line, si)"
-            :style="{ '--p': progress(line, si) }"
-            >{{ syl.text }}</span
+            v-for="copy in ['stroke', 'text']"
+            :key="copy"
+            class="copy"
+            :class="copy"
+            :aria-hidden="copy === 'stroke' || undefined"
           >
+            <span v-for="(syl, si) in line.syllables" :key="si" class="syl" :class="selClass(line, si)">{{
+              syl.text
+            }}</span>
+          </span>
         </span>
         <span
           v-if="line.index === focusIndex && ballPosition"
@@ -310,23 +360,52 @@ function progress(line: TimedLine, si: number): number {
   inset: 0;
 }
 
-/* The outline is a filter on the whole layer, so one syllable's outline never paints over its neighbour. */
+/*
+ * The unsung layer shows right of the wipe and the sung layer left of it.
+ * Each is faded as a whole, so translucent colors show the background.
+ */
 .base {
-  color: var(--inactive);
-  filter: var(--inactive-outline);
+  position: relative;
+  --text: var(--unsung-text);
+  --stroke: var(--unsung-frame);
+  opacity: var(--unsung-opacity);
+  clip-path: inset(-0.5em -0.5em -0.5em var(--sung-until));
 }
 
 .fill {
-  color: var(--active);
-  filter: var(--active-outline);
+  --text: var(--sung-text);
+  --stroke: var(--sung-frame);
+  opacity: var(--sung-opacity);
+  clip-path: inset(-0.5em calc(100% - var(--sung-until)) -0.5em -0.5em);
+}
+
+.copy {
+  display: block;
+  position: relative;
+}
+
+/* The outline is a stroked copy under the whole line, so one syllable's outline never paints over its neighbour. */
+.stroke {
+  position: absolute;
+  inset: 0;
+  color: var(--stroke);
+  -webkit-text-stroke: calc(2 * var(--outline)) var(--stroke);
+}
+
+.text {
+  color: var(--text);
 }
 
 /* Songs can animate their colors; fade as long as the latest change asks. */
-.base,
-.fill {
+.layer {
+  transition: opacity var(--color-fade);
+}
+
+.stroke,
+.text {
   transition:
     color var(--color-fade),
-    filter var(--color-fade);
+    -webkit-text-stroke-color var(--color-fade);
 }
 
 /* Selected-text effects on the syllable being sung (same on both layers so they stay aligned). */
@@ -435,9 +514,5 @@ function progress(line: TimedLine, si: number): number {
 .syl {
   display: inline-block;
   white-space: pre;
-}
-
-.fill .syl {
-  clip-path: inset(-0.3em calc((1 - var(--p)) * 100%) -0.3em -0.3em);
 }
 </style>
