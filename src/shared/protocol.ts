@@ -35,6 +35,9 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 /** A request before the session numbers it. */
 export type NewPlaybackRequest = DistributiveOmit<PlaybackRequest, 'seq'>
 
+/** Whether `v` is one of `values`, e.g. a setting from an untrusted source. */
+export const isOneOf = <T>(values: readonly T[], v: unknown): v is T => values.includes(v as T)
+
 /** How the sung color fills the lyrics: a smooth wipe, or whole syllables at once. */
 export type HighlightMode = 'wipe' | 'instant'
 export const HIGHLIGHT_MODES: readonly HighlightMode[] = ['wipe', 'instant']

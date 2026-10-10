@@ -55,13 +55,6 @@ function stepAt(line: TimedLine, timeMs: number): { i: number; p: number; last: 
   return { i, p: next.start > from ? clamp01((timeMs - from) / (next.start - from)) : 1, last: false }
 }
 
-/** How much of syllable `index` the wipe front covers, 0..1. */
-export function fillFraction(edges: readonly number[], front: number, index: number): number {
-  const left = edges[index]!
-  const width = edges[index + 1]! - left
-  return width > 0 ? clamp01((front - left) / width) : front >= left ? 1 : 0
-}
-
 /**
  * Where the bouncing ball is at `timeMs` on `line`: it lands on each
  * syllable's centre as the syllable starts, arcing in between, and rides the

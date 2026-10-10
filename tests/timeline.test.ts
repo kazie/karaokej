@@ -190,7 +190,7 @@ describe('trackWindows / activeTracks', () => {
   it('fills gaps with the tracks of the next verse, when asked', () => {
     expect(activeTracks(windows, 20_000, true)).toEqual([0])
     expect(activeTracks(windows, 5000, true)).toEqual([1])
-    expect(activeTracks(windows, 60_000, true)).toEqual([])
+    expect(activeTracks(windows, 60_000, true)).toEqual([0]) // after the last verse: who sang it
   })
 
   it('uses a short lead when lyrics show all the time', () => {

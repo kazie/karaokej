@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ballAt, fillFraction, wipeFront } from '../src/kfn/wipe'
+import { ballAt, wipeFront } from '../src/kfn/wipe'
 import { buildTimeline } from '../src/kfn/timeline'
 
 // "Ka/ra o/ke": syllables start at 1.0, 1.5, 2.0, 2.5 s (last ends at 4.0 s);
@@ -7,6 +7,9 @@ import { buildTimeline } from '../src/kfn/timeline'
 const line = buildTimeline({ texts: ['Ka/ra o/ke'], syncs: [100, 150, 200, 250] }).lines[0]!
 const edges = [0, 20, 50, 60, 100]
 const centres = [10, 35, 55, 80]
+/** How much of syllable `index` a wipe front at `front` px covers, 0..1. */
+const fillFraction = (edges: readonly number[], front: number, index: number) =>
+  Math.min(1, Math.max(0, (front - edges[index]!) / (edges[index + 1]! - edges[index]!)))
 const fills = (t: number) =>
   [0, 1, 2, 3].map((i) => +fillFraction(edges, wipeFront(line, edges, t)!, i).toFixed(2))
 

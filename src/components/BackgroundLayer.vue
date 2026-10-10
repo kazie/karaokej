@@ -31,8 +31,8 @@ const imageUrls = shallowRef(new Map<KfnEntry, string>())
 watchEffect((onCleanup) => {
   const urls = new Map<KfnEntry, string>()
   for (const frame of props.backdrop.image) {
-    if (frame.value && !urls.has(frame.value))
-      urls.set(frame.value, URL.createObjectURL(entryBlob(frame.value)))
+    const entry = frame.value?.entry
+    if (entry && !urls.has(entry)) urls.set(entry, URL.createObjectURL(entryBlob(entry)))
   }
   imageUrls.value = urls
   onCleanup(() => urls.forEach((url) => URL.revokeObjectURL(url)))
@@ -40,8 +40,6 @@ watchEffect((onCleanup) => {
 
 // Each track's keyframe now; the styles below only change at keyframes (see useKeyframe).
 const imageFrame = useKeyframe(() => props.backdrop.image, props.clock)
-const transitionFrame = useKeyframe(() => props.backdrop.imageTransition, props.clock)
-const transition = computed(() => transitionFrame.value?.value ?? 'cut')
 const color = useKeyframe(() => props.backdrop.color, props.clock)
 const tint = useKeyframe(() => props.backdrop.imageColor, props.clock)
 const offsetX = useKeyframe(() => props.backdrop.offsetX, props.clock)
@@ -58,8 +56,22 @@ watch(imageFrame, (frame) => (elapsedMs.value = frame ? Math.max(0, props.clock(
   immediate: true,
 })
 
-/** Transitions where the new picture comes in over the old one, which stays put underneath. */
-const covers = (kind: TransitionKind) => kind !== 'crossfade' && kind !== 'cut'
+/**
+ * Transitions where the new picture comes in over the old one, which stays put
+ * underneath: the CSS animation (`enter-<name>`) and where it starts from.
+ * Slides are named for the way the picture moves, wipes for the way the edge travels.
+ */
+const ENTRANCES: Partial<Record<TransitionKind, { name: string; from?: string }>> = {
+  'slide-left': { name: 'slide', from: 'translateX(100%)' },
+  'slide-right': { name: 'slide', from: 'translateX(-100%)' },
+  'slide-up': { name: 'slide', from: 'translateY(100%)' },
+  'slide-down': { name: 'slide', from: 'translateY(-100%)' },
+  'wipe-left': { name: 'wipe', from: 'inset(0 0 0 100%)' },
+  'wipe-right': { name: 'wipe', from: 'inset(0 100% 0 0)' },
+  'wipe-up': { name: 'wipe', from: 'inset(100% 0 0 0)' },
+  'wipe-down': { name: 'wipe', from: 'inset(0 0 100% 0)' },
+  zoom: { name: 'zoom' },
+}
 
 /**
  * One layer per picture, but only the previous, current and next pictures get
@@ -70,39 +82,32 @@ const layers = computed(() => {
   const frames = props.backdrop.image
   const frame = imageFrame.value
   const i = frame ? frames.indexOf(frame) : -1
-  const previous = frames[i - 1]?.value
-  const near = new Set([previous, frames[i]?.value, frames[i + 1]?.value])
-  const kind = transition.value
+  const previous = frames[i - 1]?.value?.entry
+  const currentEntry = frame?.value?.entry
+  const near = new Set([previous, currentEntry, frames[i + 1]?.value?.entry])
   const ms = frame?.transitionMs ?? 0
+  const entrance = ms > 0 ? ENTRANCES[frame?.value?.transition ?? 'cut'] : undefined
   return [...imageUrls.value].map(([entry, url]) => {
-    const current = entry === frame?.value
-    const style: Record<string, string | number | undefined> = {
+    const current = entry === currentEntry
+    // In a covering transition the new picture animates in on top, and the old one stays until it's covered.
+    const role = !entrance ? null : current ? 'enter' : entry === previous ? 'covered' : null
+    const style = {
       backgroundImage: near.has(entry) ? `url(${url})` : undefined,
       opacity: current ? 1 : 0,
-      transition: cssTransition(frame, 'opacity'),
+      transition: role ? 'none' : cssTransition(frame, 'opacity'),
+      // Both pictures follow the same animation clock, also when seeking into the transition.
+      ...(role && {
+        animationDuration: `${ms}ms`,
+        animationDelay: `${-elapsedMs.value}ms`,
+        animationFillMode: 'both',
+      }),
+      ...(role === 'enter' && {
+        zIndex: 1,
+        animationTimingFunction: frame?.easing,
+        '--from': entrance?.from,
+      }),
     }
-    if (covers(kind) && ms > 0) {
-      if (current) {
-        // The new picture animates in on top of the old one.
-        Object.assign(style, {
-          zIndex: 1,
-          transition: 'none',
-          animationDuration: `${ms}ms`,
-          animationDelay: `${-elapsedMs.value}ms`,
-          animationTimingFunction: frame?.easing,
-        })
-      } else if (entry === previous) {
-        // The old picture stays until the new one fully covers it, also when seeking into the transition.
-        Object.assign(style, {
-          transition: 'none',
-          animationDuration: `${ms}ms`,
-          animationDelay: `${-elapsedMs.value}ms`,
-        })
-      }
-    }
-    const covering = covers(kind) && ms > 0
-    const cls = covering && current ? `enter-${kind}` : covering && entry === previous ? 'covered' : undefined
-    return { url, style, cls }
+    return { url, style, cls: role === 'enter' ? `enter-${entrance!.name}` : (role ?? undefined) }
   })
 })
 
@@ -228,14 +233,23 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
   background-size: cover;
 }
 
+/* Above the pictures, including one sliding in on top (z-index 1). */
 .tint {
+  z-index: 2;
   mix-blend-mode: multiply;
 }
 
-/* Picture transitions: the new picture comes in on top of the old one (duration and delay set inline). */
-[class*='enter-'],
-.covered {
-  animation-fill-mode: both;
+/* Picture transitions: the new picture comes in on top of the old one (duration, delay and start set inline). */
+.enter-slide {
+  animation-name: slide;
+}
+
+.enter-wipe {
+  animation-name: wipe;
+}
+
+.enter-zoom {
+  animation-name: zoom-in;
 }
 
 /* The old picture under a covering transition: shown until the end, then hidden. */
@@ -253,87 +267,21 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
   }
 }
 
-.enter-slide-left {
-  animation-name: slide-left;
-}
-.enter-slide-right {
-  animation-name: slide-right;
-}
-.enter-slide-up {
-  animation-name: slide-up;
-}
-.enter-slide-down {
-  animation-name: slide-down;
-}
-.enter-wipe-left {
-  animation-name: wipe-left;
-}
-.enter-wipe-right {
-  animation-name: wipe-right;
-}
-.enter-wipe-up {
-  animation-name: wipe-up;
-}
-.enter-wipe-down {
-  animation-name: wipe-down;
-}
-.enter-zoom {
-  animation-name: zoom-in;
+@keyframes slide {
+  from {
+    transform: var(--from);
+  }
 }
 
-/* Named for the direction the picture moves or the wipe travels. */
-@keyframes slide-left {
+@keyframes wipe {
   from {
-    transform: translateX(100%);
-  }
-}
-@keyframes slide-right {
-  from {
-    transform: translateX(-100%);
-  }
-}
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-}
-@keyframes slide-down {
-  from {
-    transform: translateY(-100%);
-  }
-}
-@keyframes wipe-left {
-  from {
-    clip-path: inset(0 0 0 100%);
+    clip-path: var(--from);
   }
   to {
     clip-path: inset(0);
   }
 }
-@keyframes wipe-right {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0);
-  }
-}
-@keyframes wipe-up {
-  from {
-    clip-path: inset(100% 0 0 0);
-  }
-  to {
-    clip-path: inset(0);
-  }
-}
-@keyframes wipe-down {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0);
-  }
-}
+
 @keyframes zoom-in {
   from {
     transform: scale(0.2);

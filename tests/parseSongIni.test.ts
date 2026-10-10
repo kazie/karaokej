@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { songIniText } from '../src/kfn/buildKfn'
 import {
   DEFAULT_FRAME_WIDTH,
-  frameWidth,
+  cssRgb,
+  frameType,
+  parseColor,
   kfnColor,
   parseAnimation,
   parseIni,
@@ -29,6 +31,14 @@ describe('kfnColor', () => {
     expect(kfnColor('#FFFFFF', 'x')).toBe('rgb(255 255 255)')
     expect(kfnColor('bogus', 'fallback')).toBe('fallback')
     expect(kfnColor(undefined, 'fallback')).toBe('fallback')
+  })
+
+  it('reads its colors back, for changing their transparency', () => {
+    expect(parseColor(kfnColor('#F4D146E6', ''))).toEqual({ r: 244, g: 209, b: 70, alpha: 0.902 })
+    expect(parseColor('#c7e55c')).toEqual({ r: 199, g: 229, b: 92, alpha: 1 })
+    expect(parseColor('red')).toBeNull()
+    expect(cssRgb({ r: 1, g: 2, b: 3 }, 0.5)).toBe('rgb(1 2 3 / 0.5)')
+    expect(cssRgb({ r: 1, g: 2, b: 3 })).toBe('rgb(1 2 3)')
   })
 })
 
@@ -70,13 +80,13 @@ describe('parseSongIni', () => {
     })
   })
 
-  it('reads the outline thickness from FrameType', () => {
-    expect(frameWidth('Frame3')).toBe(3)
-    expect(frameWidth('Frame2')).toBe(2)
-    expect(frameWidth('NoFrame')).toBe(0)
-    expect(frameWidth('NoBorder')).toBe(0)
-    expect(frameWidth(undefined)).toBe(DEFAULT_FRAME_WIDTH)
-    expect(frameWidth('Shadow')).toBe(DEFAULT_FRAME_WIDTH)
+  it('reads the outline thickness and shadow from FrameType', () => {
+    expect(frameType('Frame3')).toEqual({ width: 3, shadow: false })
+    expect(frameType('Frame2')).toEqual({ width: 2, shadow: false })
+    expect(frameType('NoFrame')).toEqual({ width: 0, shadow: false })
+    expect(frameType('NoBorder')).toEqual({ width: 0, shadow: false })
+    expect(frameType(undefined)).toEqual({ width: DEFAULT_FRAME_WIDTH, shadow: false })
+    expect(frameType('Shadow')).toEqual({ width: DEFAULT_FRAME_WIDTH, shadow: true })
   })
 
   it('reads the trajectory name and whether lines fade', () => {

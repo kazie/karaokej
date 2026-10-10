@@ -1,17 +1,38 @@
+<script lang="ts">
+import type { Timeline } from '../kfn/timeline'
+
+/** One canvas for measuring lyrics, shared by every lyrics view. */
+let canvas: CanvasRenderingContext2D | null | undefined
+
+/** Line widths per timeline and font, so a band that comes and goes isn't measured again. */
+const widthCache = new WeakMap<Timeline, Map<string, number[]>>()
+
+/** Each line's width in em, in bold `family`. */
+function lineWidthsInEm(timeline: Timeline, family: string): number[] {
+  const byFont = widthCache.get(timeline) ?? new Map<string, number[]>()
+  widthCache.set(timeline, byFont)
+  let widths = byFont.get(family)
+  if (!widths) {
+    canvas ??= document.createElement('canvas').getContext('2d')
+    widths = timeline.lines.map((line) => {
+      const text = line.syllables.map((s) => s.text).join('')
+      if (!canvas) return text.length * 0.6
+      canvas.font = `bold 100px '${family}', Arial, sans-serif`
+      return canvas.measureText(text).width / 100
+    })
+    byFont.set(family, widths)
+  }
+  return widths
+}
+</script>
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
-import {
-  canvasTranslate,
-  cssTransition,
-  latestFrame,
-  lineMotion,
-  NO_SEL_TEXT_EFFECT,
-  splitAlpha,
-  type SplitColor,
-} from '../kfn/effects'
+import { canvasTranslate, cssTransition, latestFrame, lineMotion, NO_SEL_TEXT_EFFECT } from '../kfn/effects'
 import { ballAt, wipeFront } from '../kfn/wipe'
 import type { LyricsTrack } from '../kfn/song'
+import { cssRgb, parseColor, type KfnRgba } from '../kfn/parseSongIni'
 import {
   focusLineIndex,
   lineWindows,
@@ -62,19 +83,8 @@ const layout = computed(() => (props.compact ? LAYOUT.compact : LAYOUT.normal))
 const lines = computed(() => props.track.timeline.lines)
 const style = computed(() => props.track.style)
 
-let canvas: CanvasRenderingContext2D | null | undefined
-
 /** Each line's width in em, measured once per track in the song's own font. */
-const lineWidthsEm = computed(() => {
-  canvas ??= document.createElement('canvas').getContext('2d')
-  const family = style.value.fontFamily
-  return lines.value.map((line) => {
-    const text = line.syllables.map((s) => s.text).join('')
-    if (!canvas) return text.length * 0.6
-    canvas.font = `bold 100px '${family}', Arial, sans-serif`
-    return canvas.measureText(text).width / 100
-  })
-})
+const lineWidthsEm = computed(() => lineWidthsInEm(props.track.timeline, style.value.fontFamily))
 
 const focusIndex = computed(() => focusLineIndex(props.track.timeline, props.clock()))
 const focusLine = computed(() => lines.value[focusIndex.value])
@@ -87,26 +97,27 @@ const trajectory = useKeyframe(() => props.track.effects.trajectory, props.clock
 /** How lines move; songs may switch it mid-song. */
 const motion = computed(() => lineMotion(trajectory.value?.value))
 
-/** `Still` lyrics: the page of lines on screen, which changes when the focus moves past it. */
-const page = computed(() =>
-  motion.value === 'still' ? pageOf(props.track.timeline, focusIndex.value, layout.value.page) : null,
-)
-
-/** The line position the scroller centres on the anchor: the focus line, or the middle of the page. */
-const scrollFocus = computed(() => (page.value ? (page.value.start + page.value.end) / 2 : focusIndex.value))
-
 /**
- * Only lines near the focus (or the page and the one before it) are rendered.
- * One extra, invisible line on each side lets lines fade in and out as the
- * window moves.
+ * The lines on screen (indices `from` to `to`) and the line position the
+ * scroller centres on the anchor. Scrolling lyrics show lines around the
+ * focus line; `Still` lyrics show its page, which only changes when the
+ * focus moves past it. `fadeOut` lines before the range stay rendered, so
+ * lines leaving the screen can fade out (a whole page for still lyrics).
  */
-const windowLines = computed(() => {
-  if (page.value) {
-    return lines.value.slice(Math.max(0, page.value.start - layout.value.page), page.value.end + 1)
+const range = computed(() => {
+  if (motion.value === 'still') {
+    const { start, end } = pageOf(props.track.timeline, focusIndex.value, layout.value.page)
+    return { from: start, to: end, centre: (start + end) / 2, fadeOut: layout.value.page }
   }
   const { before, after } = layout.value
-  const from = Math.max(0, focusIndex.value - before - 1)
-  return lines.value.slice(from, focusIndex.value + after + 2)
+  const focus = focusIndex.value
+  return { from: focus - before, to: focus + after, centre: focus, fadeOut: 1 }
+})
+
+/** Only lines in or next to the range are rendered (invisible ones let lines fade in and out). */
+const windowLines = computed(() => {
+  const { from, to, fadeOut } = range.value
+  return lines.value.slice(Math.max(0, from - fadeOut), to + 2)
 })
 
 /** Outline thickness per KaraFun `FrameN` level. */
@@ -120,13 +131,12 @@ const OUTLINE_SCALE: Record<OutlineWidth, number> = { thin: 0.6, normal: 1, thic
  * difference as its own transparency.
  */
 function layerPaint(text = 'rgb(255 255 255)', frame = 'rgb(0 0 0)') {
-  const t = splitAlpha(text)
-  const f = splitAlpha(frame)
-  const opacity = Math.max(t.alpha, f.alpha)
-  // Below the max, the color is one of splitAlpha's `rgb(r g b)` (named colors are opaque).
-  const rel = (c: SplitColor) =>
-    c.alpha < opacity ? c.color.replace(/\)$/, ` / ${+(c.alpha / opacity).toFixed(3)})`) : c.color
-  return { text: rel(t), frame: rel(f), opacity }
+  // Song colors parse back to channels; any other CSS color (e.g. from a story) is opaque.
+  const t = parseColor(text)
+  const f = parseColor(frame)
+  const opacity = Math.max(t?.alpha ?? 1, f?.alpha ?? 1)
+  const rel = (css: string, c: KfnRgba | null) => (c && opacity > 0 ? cssRgb(c, c.alpha / opacity) : css)
+  return { text: rel(text, t), frame: rel(frame, f), opacity }
 }
 
 // Each animated property reads its own keyframe, so the root style below only
@@ -234,15 +244,25 @@ const ballPosition = computed(() =>
  * effect. Unknown names have no `.sel-*` rule and do nothing.
  */
 function selClass(line: TimedLine, si: number): string | undefined {
-  if (selEffect.value === NO_SEL_TEXT_EFFECT || lineState(line) !== 'current') return undefined
-  const p = syllableProgress(line.syllables[si]!, props.clock())
-  return p > 0 && p < 1 ? `sel sel-${selEffect.value.name}` : undefined
+  return line.index === focusIndex.value && si === selSyllable.value
+    ? `sel sel-${selEffect.value.name}`
+    : undefined
 }
 
+/** The focus line's syllable being sung, when the song has a selected-text effect for it. */
+const selSyllable = computed(() => {
+  const line = focusLine.value
+  if (selEffect.value === NO_SEL_TEXT_EFFECT || !line || lineState(line) !== 'current') return null
+  const t = props.clock()
+  const si = line.syllables.findIndex((syl) => {
+    const p = syllableProgress(syl, t)
+    return p > 0 && p < 1
+  })
+  return si < 0 ? null : si
+})
+
 function visible(line: TimedLine): boolean {
-  if (page.value) return line.index >= page.value.start && line.index <= page.value.end && shown(line)
-  const offset = line.index - focusIndex.value
-  return offset >= -layout.value.before && offset <= layout.value.after && shown(line)
+  return line.index >= range.value.from && line.index <= range.value.to && shown(line)
 }
 
 function lineState(line: TimedLine): 'past' | 'current' | 'future' {
@@ -252,9 +272,14 @@ function lineState(line: TimedLine): 'past' | 'current' | 'future' {
   return 'future'
 }
 
-/** Past the end of a line, far enough that the last glyph's outline is not cut off. */
-const ALL_SUNG = 'calc(100% + 0.5em)'
-const NONE_SUNG = '-0.5em'
+/** Past either end of a line, by the room the layers' clip-paths leave (`--bleed`). */
+const ALL_SUNG = 'calc(100% + var(--bleed))'
+const NONE_SUNG = 'calc(-1 * var(--bleed))'
+
+/** The outline copy under the text, unless the song has no outline (or shadow) at all. */
+const copies = computed(() =>
+  style.value.frameWidth > 0 || style.value.frameShadow ? ['stroke', 'text'] : ['text'],
+)
 
 /**
  * Where the sung part of `line` ends, as a CSS length from the line's left
@@ -281,7 +306,7 @@ function sungUntil(line: TimedLine): string {
     :class="[`motion-${motion}`, { shadow: style.frameShadow, 'no-fade': !style.fade }]"
     :style="rootStyle"
   >
-    <div class="scroller" :style="{ '--focus': scrollFocus }">
+    <div class="scroller" :style="{ '--focus': range.centre }">
       <p
         v-for="line in windowLines"
         :key="line.index"
@@ -290,6 +315,7 @@ function sungUntil(line: TimedLine): string {
         :class="[lineState(line), { hidden: !visible(line) }]"
         :style="{
           '--index': line.index,
+          '--sung-until': sungUntil(line),
           '--fit': `${MAX_LINE_WIDTH_CQW / Math.max((lineWidthsEm[line.index] ?? 1) * style.aspectRatio, 0.01)}cqw`,
         }"
       >
@@ -301,11 +327,10 @@ function sungUntil(line: TimedLine): string {
             :key="layer"
             class="layer"
             :class="layer"
-            :style="{ '--sung-until': sungUntil(line) }"
             :aria-hidden="layer === 'fill' || undefined"
           >
             <span
-              v-for="copy in ['stroke', 'text']"
+              v-for="copy in copies"
               :key="copy"
               class="copy"
               :class="copy"
@@ -354,6 +379,8 @@ function sungUntil(line: TimedLine): string {
 /* Lines scroll up as they are sung; top-to-bottom lyrics mirror that, so upcoming lines sit above. */
 .lyrics {
   --dir: 1;
+  /* Room around each line's clipped layers for outlines and selected-text effects (a jump or zoom on the sung syllable). */
+  --bleed: 1.5em;
 }
 
 .motion-down {
@@ -433,14 +460,16 @@ function sungUntil(line: TimedLine): string {
   --text: var(--unsung-text);
   --stroke: var(--unsung-frame);
   opacity: var(--unsung-opacity);
-  clip-path: inset(-0.5em -0.5em -0.5em var(--sung-until));
+  clip-path: inset(calc(-1 * var(--bleed)) calc(-1 * var(--bleed)) calc(-1 * var(--bleed)) var(--sung-until));
 }
 
 .fill {
   --text: var(--sung-text);
   --stroke: var(--sung-frame);
   opacity: var(--sung-opacity);
-  clip-path: inset(-0.5em calc(100% - var(--sung-until)) -0.5em -0.5em);
+  clip-path: inset(
+    calc(-1 * var(--bleed)) calc(100% - var(--sung-until)) calc(-1 * var(--bleed)) calc(-1 * var(--bleed))
+  );
 }
 
 .copy {
@@ -452,12 +481,14 @@ function sungUntil(line: TimedLine): string {
 .stroke {
   position: absolute;
   inset: 0;
-  color: var(--stroke);
+  /* Only the outline: filled glyphs would show through translucent text. */
+  color: transparent;
   -webkit-text-stroke: calc(2 * var(--outline)) var(--stroke);
 }
 
 /* `FrameType=Shadow`: the copy sits down and right of the text instead of around it. */
 .shadow .stroke {
+  color: var(--stroke);
   -webkit-text-stroke: 0;
   transform: translate(calc(1.5 * var(--outline)), calc(1.5 * var(--outline)));
 }

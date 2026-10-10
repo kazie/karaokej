@@ -30,16 +30,14 @@ const state = reactive({
   highlight: 'wipe' as HighlightMode,
   outline: 'normal' as OutlineWidth,
   frameWidth: 3,
-  // KaraFun styles: "active" is sung text, "inactive" is not yet sung; frames are the outlines.
-  activeColor: '#c7e55c',
-  inactiveColor: '#f9f8f4',
-  frameColor: '#010101',
-  inactiveFrameColor: '#1e4d42',
+  colors: {
+    activeColor: '#c7e55c',
+    inactiveColor: '#f9f8f4',
+    frameColor: '#010101',
+    inactiveFrameColor: '#1e4d42',
+  },
   // KaraFun colors are #RRGGBBAA; the color pickers have no alpha, so it has its own sliders.
-  activeAlpha: 1,
-  inactiveAlpha: 1,
-  frameAlpha: 1,
-  inactiveFrameAlpha: 1,
+  alpha: { activeColor: 1, inactiveColor: 1, frameColor: 1, inactiveFrameColor: 1 },
   /** A busy background, to see translucent lyrics against. */
   stripes: false,
   fontFamily: 'Arial',
@@ -49,25 +47,42 @@ const state = reactive({
   fade: true,
 })
 
-/** The duet demo has its own settings; it starts in its 6 s intro, where the lyrics are still hidden. */
-const duet = reactive({
-  playing: true,
-  seekMs: 0,
-  ball: true,
-  leadInMs: DEFAULT_SETTINGS.leadInMs as number,
-  highlight: 'wipe' as HighlightMode,
-})
-const duetEndMs = (DUET_LINES.first.at(-1)![0] + 300) * 10
+/** KaraFun styles: "active" is sung text, "inactive" is not yet sung; frames are the outlines. */
+const COLORS = [
+  { key: 'activeColor', color: 'Sung color', alpha: 'Sung opacity' },
+  { key: 'inactiveColor', color: 'Not yet sung color', alpha: 'Not yet sung opacity' },
+  { key: 'frameColor', color: 'Sung outline', alpha: 'Sung outline opacity' },
+  { key: 'inactiveFrameColor', color: 'Not yet sung outline', alpha: 'Not yet sung outline opacity' },
+] as const
 
-/** The group demo starts in its 3 s intro. */
-const group = reactive({
-  playing: true,
-  seekMs: 0,
-  ball: true,
-  leadInMs: DEFAULT_SETTINGS.leadInMs as number,
-  highlight: 'wipe' as HighlightMode,
-})
-const groupEndMs = (GROUP_SINGERS[0].lines.at(-1)![0] + 300) * 10
+/**
+ * Demos with a band per singer, each with its own settings. Both start in
+ * their intro, where the lyrics are still hidden.
+ */
+const multi = [
+  {
+    demo: 'duet',
+    title: 'Duet: one singer waits',
+    note: "Singer one sings a verse, then singer two, then both sing the last line. With a lead-in, each band stays empty until shortly before its singer's turn, and the 6 s intro starts with no lyrics at all.",
+    endMs: (DUET_LINES.first.at(-1)![0] + 300) * 10,
+  },
+  {
+    demo: 'group',
+    title: 'Group: a track per singer',
+    note: 'Five singers with a track each, like group songs that have one per character. Only the singers with lines on screen get a band, labelled with their name; two share a line, then all sing the last one.',
+    endMs: (GROUP_SINGERS[0].lines.at(-1)![0] + 300) * 10,
+  },
+].map((d) => ({
+  ...d,
+  demo: d.demo as 'duet' | 'group',
+  state: reactive({
+    playing: true,
+    seekMs: 0,
+    ball: true,
+    leadInMs: DEFAULT_SETTINGS.leadInMs as number,
+    highlight: 'wipe' as HighlightMode,
+  }),
+}))
 
 /** `#RRGGBB` plus an alpha of 0..1 → KaraFun `#RRGGBBAA`. */
 const withAlpha = (hex: string, alpha: number) =>
@@ -77,10 +92,7 @@ const withAlpha = (hex: string, alpha: number) =>
     .padStart(2, '0')
 
 const style = computed<Partial<LyricsStyle>>(() => ({
-  activeColor: withAlpha(state.activeColor, state.activeAlpha),
-  inactiveColor: withAlpha(state.inactiveColor, state.inactiveAlpha),
-  frameColor: withAlpha(state.frameColor, state.frameAlpha),
-  inactiveFrameColor: withAlpha(state.inactiveFrameColor, state.inactiveFrameAlpha),
+  ...Object.fromEntries(COLORS.map(({ key }) => [key, withAlpha(state.colors[key], state.alpha[key])])),
   fontFamily: state.fontFamily,
   fontSize: state.fontSize,
   alignment: state.alignment,
@@ -129,22 +141,12 @@ const motions = [
         <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
         <HstSlider v-model="state.frameWidth" title="FrameType level" :min="0" :max="6" :step="1" />
         <HstSlider v-model="state.seekMs" title="Jump to (ms)" :min="0" :max="lastLineEnd" :step="100" />
-        <HstColorSelect v-model="state.activeColor" title="Sung color" />
-        <HstColorSelect v-model="state.inactiveColor" title="Not yet sung color" />
-        <HstColorSelect v-model="state.frameColor" title="Sung outline" />
-        <HstColorSelect v-model="state.inactiveFrameColor" title="Not yet sung outline" />
-        <HstSlider v-model="state.activeAlpha" title="Sung opacity" :min="0" :max="1" :step="0.05" />
+        <HstColorSelect v-for="c in COLORS" :key="c.key" v-model="state.colors[c.key]" :title="c.color" />
         <HstSlider
-          v-model="state.inactiveAlpha"
-          title="Not yet sung opacity"
-          :min="0"
-          :max="1"
-          :step="0.05"
-        />
-        <HstSlider v-model="state.frameAlpha" title="Sung outline opacity" :min="0" :max="1" :step="0.05" />
-        <HstSlider
-          v-model="state.inactiveFrameAlpha"
-          title="Not yet sung outline opacity"
+          v-for="c in COLORS"
+          :key="c.key"
+          v-model="state.alpha[c.key]"
+          :title="c.alpha"
           :min="0"
           :max="1"
           :step="0.05"
@@ -159,50 +161,24 @@ const motions = [
         <HstCheckbox v-model="state.compact" title="Compact (duet band)" />
       </template>
     </Variant>
-    <Variant title="Duet: one singer waits">
+    <Variant v-for="d in multi" :key="d.demo" :title="d.title">
       <div class="stage">
         <LyricsDemo
-          demo="duet"
-          :playing="duet.playing"
-          :seek-ms="duet.seekMs"
-          :ball="duet.ball"
-          :lead-in-ms="duet.leadInMs"
-          :highlight="duet.highlight"
+          :demo="d.demo"
+          :playing="d.state.playing"
+          :seek-ms="d.state.seekMs"
+          :ball="d.state.ball"
+          :lead-in-ms="d.state.leadInMs"
+          :highlight="d.state.highlight"
         />
       </div>
       <template #controls>
-        <p class="note">
-          Singer one sings a verse, then singer two, then both sing the last line. With a lead-in, each band
-          stays empty until shortly before its singer's turn, and the 6 s intro starts with no lyrics at all.
-        </p>
-        <HstCheckbox v-model="duet.playing" title="Playing" />
-        <HstSelect v-model="duet.leadInMs" title="Show lyrics ahead" :options="leadIns" />
-        <HstButtonGroup v-model="duet.highlight" title="Highlight" :options="highlights" />
-        <HstCheckbox v-model="duet.ball" title="Bouncing ball" />
-        <HstSlider v-model="duet.seekMs" title="Jump to (ms)" :min="0" :max="duetEndMs" :step="100" />
-      </template>
-    </Variant>
-    <Variant title="Group: a track per singer">
-      <div class="stage">
-        <LyricsDemo
-          demo="group"
-          :playing="group.playing"
-          :seek-ms="group.seekMs"
-          :ball="group.ball"
-          :lead-in-ms="group.leadInMs"
-          :highlight="group.highlight"
-        />
-      </div>
-      <template #controls>
-        <p class="note">
-          Five singers with a track each, like group songs that have one per character. Only the singers with
-          lines on screen get a band, labelled with their name; two share a line, then all sing the last one.
-        </p>
-        <HstCheckbox v-model="group.playing" title="Playing" />
-        <HstSelect v-model="group.leadInMs" title="Show lyrics ahead" :options="leadIns" />
-        <HstButtonGroup v-model="group.highlight" title="Highlight" :options="highlights" />
-        <HstCheckbox v-model="group.ball" title="Bouncing ball" />
-        <HstSlider v-model="group.seekMs" title="Jump to (ms)" :min="0" :max="groupEndMs" :step="100" />
+        <p class="note">{{ d.note }}</p>
+        <HstCheckbox v-model="d.state.playing" title="Playing" />
+        <HstSelect v-model="d.state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="d.state.highlight" title="Highlight" :options="highlights" />
+        <HstCheckbox v-model="d.state.ball" title="Bouncing ball" />
+        <HstSlider v-model="d.state.seekMs" title="Jump to (ms)" :min="0" :max="d.endMs" :step="100" />
       </template>
     </Variant>
   </Story>

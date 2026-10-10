@@ -136,11 +136,23 @@ export function parseKfnHex(value: string | undefined): KfnRgba | null {
   return { r, g, b, alpha: m[2] ? parseInt(m[2], 16) / 255 : 1 }
 }
 
+/** CSS `rgb()` for a color, with `alpha` (0..1) unless it is opaque. */
+export function cssRgb(c: Pick<KfnRgba, 'r' | 'g' | 'b'>, alpha = 1): string {
+  return alpha >= 1 ? `rgb(${c.r} ${c.g} ${c.b})` : `rgb(${c.r} ${c.g} ${c.b} / ${+alpha.toFixed(3)})`
+}
+
 /** Convert KaraFun `#RRGGBB` / `#RRGGBBAA` to a CSS color. */
 export function kfnColor(value: string | undefined, fallback: string): string {
   const c = parseKfnHex(value)
-  if (!c) return fallback
-  return c.alpha === 1 ? `rgb(${c.r} ${c.g} ${c.b})` : `rgb(${c.r} ${c.g} ${c.b} / ${+c.alpha.toFixed(3)})`
+  return c ? cssRgb(c, c.alpha) : fallback
+}
+
+/** Read back a color written by {@link cssRgb} / {@link kfnColor} (or KaraFun hex); null for other CSS colors. */
+export function parseColor(value: string | undefined): KfnRgba | null {
+  const hex = parseKfnHex(value)
+  if (hex) return hex
+  const m = /^rgb\((\d+) (\d+) (\d+)(?: \/ ([\d.]+))?\)$/.exec(value?.trim() ?? '')
+  return m ? { r: +m[1]!, g: +m[2]!, b: +m[3]!, alpha: m[4] ? Math.min(1, +m[4]) : 1 } : null
 }
 
 function int(value: string | undefined, fallback = 0): number {
@@ -172,29 +184,34 @@ function numberedValues(section: IniSection, prefix: string): string[] {
 /** `PlainBottomToTop*1.000000*…` → `PlainBottomToTop`. */
 export const trajectoryName = (value: string | undefined): string => (value ?? '').split('*')[0]!.trim()
 
-/** Outline level for files without a (known) `FrameType`. */
+/** Outline level for files without a (known) `FrameType`, and the size of a `Shadow`'s offset. */
 export const DEFAULT_FRAME_WIDTH = 2
 
-/** `FrameType`: `Frame3` → 3, `NoFrame` / `NoBorder` → 0. */
-export function frameWidth(value: string | undefined): number {
+/** KaraFun's font size when a file doesn't give one. */
+export const DEFAULT_FONT_SIZE = 18
+
+/** `FrameType`: `Frame3` → width 3, `NoFrame` / `NoBorder` → 0, `Shadow` → a drop shadow. */
+export function frameType(value: string | undefined): { width: number; shadow: boolean } {
   const v = value?.trim() ?? ''
-  if (/^no(frame|border)$/i.test(v)) return 0
+  if (/^no(frame|border)$/i.test(v)) return { width: 0, shadow: false }
+  if (/^shadow$/i.test(v)) return { width: DEFAULT_FRAME_WIDTH, shadow: true }
   const m = /^frame(\d+)$/i.exec(v)
-  return m ? parseInt(m[1]!, 10) : DEFAULT_FRAME_WIDTH
+  return { width: m ? parseInt(m[1]!, 10) : DEFAULT_FRAME_WIDTH, shadow: false }
 }
 
 function parseStyle(s: IniSection): LyricsStyle {
-  const [fontFamily = 'Arial', size = '18'] = (s.get('Font') ?? '').split('*')
+  const [fontFamily = 'Arial', size] = (s.get('Font') ?? '').split('*')
   const align = (s.get('Alignment') ?? 'Center').toLowerCase()
+  const frame = frameType(s.get('FrameType'))
   return {
     fontFamily: fontFamily || 'Arial',
-    fontSize: float(size, 18) || 18,
+    fontSize: float(size, DEFAULT_FONT_SIZE) || DEFAULT_FONT_SIZE,
     activeColor: kfnColor(s.get('ActiveColor'), 'rgb(255 64 64)'),
     inactiveColor: kfnColor(s.get('InactiveColor'), 'rgb(255 255 255)'),
     frameColor: kfnColor(s.get('FrameColor'), 'rgb(0 0 0)'),
     inactiveFrameColor: kfnColor(s.get('InactiveFrameColor'), 'rgb(0 0 0)'),
-    frameWidth: frameWidth(s.get('FrameType')),
-    frameShadow: /^shadow$/i.test(s.get('FrameType')?.trim() ?? ''),
+    frameWidth: frame.width,
+    frameShadow: frame.shadow,
     aspectRatio: float(s.get('AspectRatio'), 1) || 1,
     alignment: align === 'left' || align === 'right' ? align : 'center',
     trajectory: trajectoryName(s.get('Trajectory')),

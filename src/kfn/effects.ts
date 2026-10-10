@@ -116,21 +116,6 @@ export function floatStep(action: AnimAction, type: string): Step<number> | unde
   }
 }
 
-export interface SplitColor {
-  /** The color without transparency. */
-  color: string
-  /** 0..1 */
-  alpha: number
-}
-
-/** A CSS color from {@link kfnColor} (or `#RRGGBB[AA]`) split into an opaque color and its alpha. */
-export function splitAlpha(css: string): SplitColor {
-  const hex = parseKfnHex(css)
-  if (hex) return { color: `rgb(${hex.r} ${hex.g} ${hex.b})`, alpha: hex.alpha }
-  const m = /^rgb\((\d+ \d+ \d+) \/ ([\d.]+)\)$/.exec(css.trim())
-  return m ? { color: `rgb(${m[1]})`, alpha: Math.min(1, +m[2]!) } : { color: css, alpha: 1 }
-}
-
 export interface ImageColor {
   /** 0..1, from the color's alpha. */
   opacity: number

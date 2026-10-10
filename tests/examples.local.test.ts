@@ -60,7 +60,7 @@ describe.skipIf(!ulf)('Ulf Lundell - Öppna Landskap (mixed encoding, 26 backgro
     const image = song().backdrop.image
     expect(image).toHaveLength(26)
     expect(image.every((f) => f.value !== null)).toBe(true)
-    expect(image.some((f) => f.value?.name === 'augusti_Kräftskiva_Fest-_porträtt_ica1.jpg')).toBe(true)
+    expect(image.some((f) => f.value?.entry.name === 'augusti_Kräftskiva_Fest-_porträtt_ica1.jpg')).toBe(true)
     expect(image[1]!.startMs).toBe(68_610)
   })
 })

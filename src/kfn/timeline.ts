@@ -208,15 +208,18 @@ export function trackWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
 /**
  * Indices of the tracks with lines on screen at `timeMs`. With `fillGaps`,
  * when no track is on, the tracks of the next verse to come are returned
- * instead (for showing lyrics all the time).
+ * instead, or after the last verse the tracks that sang it (for showing
+ * lyrics all the time).
  */
 export function activeTracks(windows: readonly ShowWindow[][], timeMs: number, fillGaps = false): number[] {
   const on = windows.flatMap((ws, i) => (ws.some((w) => shownAt(w, timeMs)) ? [i] : []))
   if (on.length || !fillGaps) return on
   const nextStart = (ws: readonly ShowWindow[]) => ws.find((w) => w.showFrom > timeMs)?.showFrom ?? Infinity
   const soonest = Math.min(...windows.map(nextStart))
-  if (!Number.isFinite(soonest)) return []
-  return windows.flatMap((ws, i) => (nextStart(ws) === soonest ? [i] : []))
+  if (Number.isFinite(soonest)) return windows.flatMap((ws, i) => (nextStart(ws) === soonest ? [i] : []))
+  const lastEnd = (ws: readonly ShowWindow[]) => Math.max(...ws.map((w) => w.hideAfter))
+  const latest = Math.max(...windows.map(lastEnd))
+  return Number.isFinite(latest) ? windows.flatMap((ws, i) => (lastEnd(ws) === latest ? [i] : [])) : []
 }
 
 /** A run of lines shown together by `Still` lyrics: indices `start` to `end` inclusive. */

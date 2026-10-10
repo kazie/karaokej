@@ -30,16 +30,21 @@ const props = withDefaults(
 /** Songs with more tracks than this only show the active ones. */
 const MAX_FIXED_TRACKS = 2
 
+/**
+ * Whether bands come and go. Their lyrics are then always compact, so a
+ * singer's layout doesn't jump when another singer's band appears.
+ */
 const dynamic = computed(() => props.tracks.length > MAX_FIXED_TRACKS)
 const windows = computed(() => props.tracks.map((t) => trackWindows(t.timeline, props.leadInMs)))
 
-/** The active tracks as a key, so the bands below only change when the set does, not every frame. */
-const activeKey = computed(() =>
-  dynamic.value
-    ? activeTracks(windows.value, props.clock(), props.leadInMs <= 0).join(',')
-    : props.tracks.map((_, i) => i).join(','),
-)
-const shown = computed(() => (activeKey.value ? activeKey.value.split(',').map(Number) : []))
+/** The tracks with a band. The same array while the set is unchanged, so bands don't re-render every frame. */
+const shown = computed<number[]>((previous) => {
+  const next = dynamic.value
+    ? activeTracks(windows.value, props.clock(), props.leadInMs <= 0)
+    : props.tracks.map((_, i) => i)
+  return previous && previous.join() === next.join() ? previous : next
+})
+const bands = computed(() => shown.value.map((index) => ({ index, track: props.tracks[index]! })))
 
 const showCaptions = computed(() => props.tracks.length > 1)
 </script>
@@ -47,26 +52,26 @@ const showCaptions = computed(() => props.tracks.length > 1)
 <template>
   <TransitionGroup name="band">
     <div
-      v-for="(index, slot) in shown"
+      v-for="({ index, track }, slot) in bands"
       :key="index"
       class="band"
-      :style="{ top: `${(slot / shown.length) * 100}%`, height: `${100 / shown.length}%` }"
+      :style="{ top: `${(slot / bands.length) * 100}%`, height: `${100 / bands.length}%` }"
     >
       <LyricsView
-        :track="tracks[index]!"
+        :track="track"
         :clock="clock"
         :font-scale="fontScale"
-        :compact="compact || shown.length > 1"
+        :compact="compact || dynamic || bands.length > 1"
         :ball="ball"
         :lead-in-ms="leadInMs"
         :highlight="highlight"
         :outline="outline"
       />
       <span
-        v-if="showCaptions && tracks[index]!.caption"
+        v-if="showCaptions && track.caption"
         class="caption"
-        :style="{ color: tracks[index]!.style.activeColor, '--frame': tracks[index]!.style.frameColor }"
-        >{{ tracks[index]!.caption }}</span
+        :style="{ color: track.style.activeColor, '--frame': track.style.frameColor }"
+        >{{ track.caption }}</span
       >
     </div>
   </TransitionGroup>

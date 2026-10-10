@@ -15,6 +15,7 @@ import {
 } from './effects'
 import { findEntry, KfnEntryType, type KfnEntry, type KfnFile } from './parseKfn'
 import {
+  DEFAULT_FONT_SIZE,
   float,
   parseSongIni,
   trajectoryName,
@@ -53,14 +54,17 @@ export interface LyricsTrack {
  * at sizes like 530 that would fill the screen many times over.
  */
 const MAX_FONT_SIZE = 100
-const DEFAULT_FONT_SIZE = 18
+
+/** A background picture and how it comes in when it replaces the previous one. */
+export interface BackdropPicture {
+  entry: KfnEntry
+  transition: TransitionKind
+}
 
 /** The picture background and everything that changes it over time. */
 export interface Backdrop {
   /** null: no picture, just the color. */
-  image: Keyframe<KfnEntry | null>[]
-  /** How each picture change in `image` comes in (same keyframe times). */
-  imageTransition: Keyframe<TransitionKind>[]
+  image: Keyframe<BackdropPicture | null>[]
   color: Keyframe<string>[]
   imageColor: Keyframe<ImageColor>[]
   offsetX: Keyframe<number>[]
@@ -120,7 +124,6 @@ function backdrop(kfn: KfnFile, e: Effect | undefined, shift: number, warnings: 
   if (e?.kind !== 'background') {
     return {
       image: still(null),
-      imageTransition: still<TransitionKind>('cut'),
       color: still('rgb(0 0 0)'),
       imageColor: still(imageColor(undefined)),
       offsetX: still(0),
@@ -133,24 +136,23 @@ function backdrop(kfn: KfnFile, e: Effect | undefined, shift: number, warnings: 
     if (!entry) warnings.push(`Background image ${name} not found`)
     return entry
   }
-  const initial = e.image ? (lookup(e.image) ?? null) : null
+  const first = e.image ? lookup(e.image) : undefined
   return {
-    image: buildTrack<KfnEntry | null>(initial, e.animations, shift, (a) => {
-      if (a.type !== 'ChgBgImg' || !a.params.LibImage) return undefined
-      const entry = lookup(a.params.LibImage)
-      if (!entry) return undefined // keep the previous picture
-      const instant = transitionKind(a.params.Effect) === 'cut'
-      return {
-        value: entry,
-        transitionCs: instant ? 0 : float(a.params.TransitionTime),
-        easing: easingFor(a.params.TransType),
-      }
-    }),
-    // Same picture changes as `image` (missing pictures skipped there too), so the keyframes line up.
-    imageTransition: buildTrack<TransitionKind>('cut', e.animations, shift, (a) =>
-      a.type === 'ChgBgImg' && a.params.LibImage && findEntry(kfn, a.params.LibImage)
-        ? { value: transitionKind(a.params.Effect) }
-        : undefined,
+    image: buildTrack<BackdropPicture | null>(
+      first ? { entry: first, transition: 'cut' } : null,
+      e.animations,
+      shift,
+      (a) => {
+        if (a.type !== 'ChgBgImg' || !a.params.LibImage) return undefined
+        const entry = lookup(a.params.LibImage)
+        if (!entry) return undefined // keep the previous picture
+        const transition = transitionKind(a.params.Effect)
+        return {
+          value: { entry, transition },
+          transitionCs: transition === 'cut' ? 0 : float(a.params.TransitionTime),
+          easing: easingFor(a.params.TransType),
+        }
+      },
     ),
     color: buildTrack(e.color, e.animations, shift, (a) => colorStep(a, 'ChgColColor', e.color)),
     imageColor: buildTrack(imageColor(e.imageColor), e.animations, shift, (a) =>
@@ -238,6 +240,7 @@ const MIME_TYPES: Record<string, string> = {
   m4a: 'audio/mp4',
   flac: 'audio/flac',
   wma: 'audio/x-ms-wma',
+  wmv: 'video/x-ms-wmv',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -259,6 +262,28 @@ const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(.
 
 /** Start of an ASF (WMA/WMV) file: its header object's GUID. */
 const ASF_HEADER = [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11]
+/** ASF's video stream type GUID (BC19EFC0-5B4D-11CF-A8FD-00805F5C442B, as stored), declared by files with video. */
+const ASF_VIDEO_STREAM = [
+  0xc0, 0xef, 0x19, 0xbc, 0x4d, 0x5b, 0xcf, 0x11, 0xa8, 0xfd, 0x00, 0x80, 0x5f, 0x5c, 0x44, 0x2b,
+]
+/** ASF stream declarations sit in the header, near the start of the file. */
+const ASF_HEADER_SCAN = 64 * 1024
+
+/** Whether an ASF file declares a video stream (WMV) rather than only audio (WMA). */
+function asfHasVideo(b: Uint8Array): boolean {
+  const end = Math.min(b.length, ASF_HEADER_SCAN) - ASF_VIDEO_STREAM.length
+  // Jump between candidate first bytes, then compare the rest.
+  for (
+    let i = b.indexOf(ASF_VIDEO_STREAM[0]!);
+    i >= 0 && i <= end;
+    i = b.indexOf(ASF_VIDEO_STREAM[0]!, i + 1)
+  ) {
+    let j = 1
+    while (j < ASF_VIDEO_STREAM.length && b[i + j] === ASF_VIDEO_STREAM[j]) j++
+    if (j === ASF_VIDEO_STREAM.length) return true
+  }
+  return false
+}
 
 /**
  * Media type from the file's content, falling back to its name. KaraFun files
@@ -271,15 +296,18 @@ export function sniffMime(entry: Pick<KfnEntry, 'name' | 'data'>): string {
   if (ascii(b, 0, 4) === 'RIFF' && ascii(b, 8, 12) === 'AVI ') return 'video/x-msvideo'
   if (ascii(b, 0, 4) === 'fLaC') return 'audio/flac'
   if (ascii(b, 0, 3) === 'ID3' || (b[0] === 0xff && ((b[1] ?? 0) & 0xe0) === 0xe0)) return 'audio/mpeg'
-  if (ASF_HEADER.every((byte, i) => b[i] === byte)) return 'audio/x-ms-wma'
+  if (ASF_HEADER.every((byte, i) => b[i] === byte)) {
+    // ASF holds both WMA music and WMV video; the header says which streams it has.
+    return asfHasVideo(b) ? 'video/x-ms-wmv' : 'audio/x-ms-wma'
+  }
   return mimeType(entry.name)
 }
 
 /** Music formats no browser plays, with a name to tell the user. */
-const UNPLAYABLE_MUSIC: Record<string, string> = { 'audio/x-ms-wma': 'WMA' }
+const UNPLAYABLE_MUSIC: Record<string, string> = { 'audio/x-ms-wma': 'WMA', 'video/x-ms-wmv': 'WMV' }
 
 /** Why `music` can't be played in a browser, or null if it can (as far as we know). */
-export function unplayableMusic(music: KfnEntry): string | null {
+export function unplayableMusic(music: Pick<KfnEntry, 'name' | 'data'>): string | null {
   const format = UNPLAYABLE_MUSIC[sniffMime(music)]
   return format ? `This song’s music is ${format}, which browsers can’t play` : null
 }

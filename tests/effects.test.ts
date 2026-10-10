@@ -8,10 +8,9 @@ import {
   transitionKind,
   NO_SEL_TEXT_EFFECT,
   selTextEffect,
-  splitAlpha,
   valueAt,
 } from '../src/kfn/effects'
-import { kfnColor, parseAnimation } from '../src/kfn/parseSongIni'
+import { parseAnimation } from '../src/kfn/parseSongIni'
 
 const frames = [
   { startMs: 0, value: 'a', transitionMs: 0, easing: 'linear' },
@@ -73,15 +72,6 @@ describe('imageColor / selTextEffect', () => {
     expect(selTextEffect('JumpOneTime*2.000000')).toEqual({ name: 'JumpOneTime', intensity: 2 })
     expect(selTextEffect('')).toBe(NO_SEL_TEXT_EFFECT)
     expect(selTextEffect('NoEffect*1.000000*1.000000*1*1')).toBe(NO_SEL_TEXT_EFFECT)
-  })
-})
-
-describe('splitAlpha', () => {
-  it('splits KaraFun colors into an opaque color and alpha', () => {
-    expect(splitAlpha(kfnColor('#F4D146E6', ''))).toEqual({ color: 'rgb(244 209 70)', alpha: 0.902 })
-    expect(splitAlpha(kfnColor('#FFFFFFFF', ''))).toEqual({ color: 'rgb(255 255 255)', alpha: 1 })
-    expect(splitAlpha('#c7e55c')).toEqual({ color: 'rgb(199 229 92)', alpha: 1 })
-    expect(splitAlpha('red')).toEqual({ color: 'red', alpha: 1 })
   })
 })
 
