@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import {
   HIGHLIGHT_MODES,
+  isOneOf,
   MAX_SINGER_LENGTH,
+  OUTLINE_WIDTHS,
   SCREEN_COMMANDS,
   type ClientCommand,
   type ClientRole,
-  type HighlightMode,
   type ScanStatus,
   type ServerMessage,
   type SessionState,
@@ -36,10 +37,15 @@ const num = (v: unknown, field: string): number => {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new CommandError(`Invalid ${field}`)
   return v
 }
-const highlightMode = (v: unknown, field: string): HighlightMode => {
-  if (!HIGHLIGHT_MODES.includes(v as HighlightMode)) throw new CommandError(`Invalid ${field}`)
-  return v as HighlightMode
-}
+/** A check that the value is one of `values`. */
+const oneOf =
+  <T>(values: readonly T[]) =>
+  (v: unknown, field: string): T => {
+    if (!isOneOf(values, v)) throw new CommandError(`Invalid ${field}`)
+    return v
+  }
+const highlightMode = oneOf(HIGHLIGHT_MODES)
+const outlineWidth = oneOf(OUTLINE_WIDTHS)
 /** Validate an optional field: absent is fine, present must pass `check`. */
 const optional = <T>(v: unknown, check: (v: unknown, field: string) => T, field: string): T | undefined =>
   v === undefined ? undefined : check(v, field)
@@ -80,6 +86,8 @@ export function parseCommand(raw: string): ClientCommand {
       return { type: 'setLeadIn', ms: num(msg.ms, 'ms') }
     case 'setHighlight':
       return { type: 'setHighlight', mode: highlightMode(msg.mode, 'mode') }
+    case 'setOutline':
+      return { type: 'setOutline', width: outlineWidth(msg.width, 'width') }
     case 'setBall':
       return { type: 'setBall', itemId: str(msg.itemId, 'itemId'), enabled: bool(msg.enabled, 'enabled') }
     case 'ping':

@@ -2,7 +2,7 @@
 import { computed, ref, shallowRef, watch, watchEffect } from 'vue'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { useObjectUrl } from '../composables/useObjectUrl'
-import { canvasTranslate, cssTransition, latestFrame } from '../kfn/effects'
+import { canvasTranslate, cssTransition, latestFrame, type TransitionKind } from '../kfn/effects'
 import type { KfnEntry } from '../kfn/parseKfn'
 import { entryBlob, sniffMime, type Backdrop, type VideoBackground } from '../kfn/song'
 
@@ -31,8 +31,8 @@ const imageUrls = shallowRef(new Map<KfnEntry, string>())
 watchEffect((onCleanup) => {
   const urls = new Map<KfnEntry, string>()
   for (const frame of props.backdrop.image) {
-    if (frame.value && !urls.has(frame.value))
-      urls.set(frame.value, URL.createObjectURL(entryBlob(frame.value)))
+    const entry = frame.value?.entry
+    if (entry && !urls.has(entry)) urls.set(entry, URL.createObjectURL(entryBlob(entry)))
   }
   imageUrls.value = urls
   onCleanup(() => urls.forEach((url) => URL.revokeObjectURL(url)))
@@ -47,19 +47,73 @@ const offsetY = useKeyframe(() => props.backdrop.offsetY, props.clock)
 const depth = useKeyframe(() => props.backdrop.depth, props.clock)
 
 /**
+ * How far into the current picture change we are, taken when it starts: a
+ * seek into (or past) a transition then shows it from there instead of
+ * replaying it from the start.
+ */
+const elapsedMs = ref(0)
+watch(imageFrame, (frame) => (elapsedMs.value = frame ? Math.max(0, props.clock() - frame.startMs) : 0), {
+  immediate: true,
+})
+
+/**
+ * Transitions where the new picture comes in over the old one, which stays put
+ * underneath: the CSS animation (`enter-<name>`), where it starts from, and
+ * whether it also fades in. Slides are named for the way the picture moves,
+ * wipes for the way the edge travels.
+ */
+const ENTRANCES: Partial<Record<TransitionKind, { name: 'move' | 'wipe'; from: string; fade?: boolean }>> = {
+  'slide-left': { name: 'move', from: 'translateX(100%)' },
+  'slide-right': { name: 'move', from: 'translateX(-100%)' },
+  'slide-up': { name: 'move', from: 'translateY(100%)' },
+  'slide-down': { name: 'move', from: 'translateY(-100%)' },
+  'wipe-left': { name: 'wipe', from: 'inset(0 0 0 100%)' },
+  'wipe-right': { name: 'wipe', from: 'inset(0 100% 0 0)' },
+  'wipe-up': { name: 'wipe', from: 'inset(100% 0 0 0)' },
+  'wipe-down': { name: 'wipe', from: 'inset(0 0 100% 0)' },
+  'zoom-in': { name: 'move', from: 'scale(0.2)' },
+  'zoom-in-fade': { name: 'move', from: 'scale(0.2)', fade: true },
+  'zoom-out': { name: 'move', from: 'scale(2)' },
+  'zoom-out-fade': { name: 'move', from: 'scale(2)', fade: true },
+}
+
+/**
  * One layer per picture, but only the previous, current and next pictures get
- * their image set: enough for crossfades (and preloading the next one) without
- * keeping every picture of the song decoded.
+ * their image set: enough for transitions (and preloading the next one)
+ * without keeping every picture of the song decoded.
  */
 const layers = computed(() => {
   const frames = props.backdrop.image
-  const i = imageFrame.value ? frames.indexOf(imageFrame.value) : -1
-  const near = new Set([frames[i - 1]?.value, frames[i]?.value, frames[i + 1]?.value])
-  return [...imageUrls.value].map(([entry, url]) => ({
-    url,
-    image: near.has(entry) ? `url(${url})` : undefined,
-    visible: entry === imageFrame.value?.value,
-  }))
+  const frame = imageFrame.value
+  const i = frame ? frames.indexOf(frame) : -1
+  const previous = frames[i - 1]?.value?.entry
+  const currentEntry = frame?.value?.entry
+  const near = new Set([previous, currentEntry, frames[i + 1]?.value?.entry])
+  const ms = frame?.transitionMs ?? 0
+  const entrance = ms > 0 ? ENTRANCES[frame?.value?.transition ?? 'cut'] : undefined
+  return [...imageUrls.value].map(([entry, url]) => {
+    const current = entry === currentEntry
+    // In a covering transition the new picture animates in on top, and the old one stays until it's covered.
+    const role = !entrance ? null : current ? 'enter' : entry === previous ? 'covered' : null
+    const style = {
+      backgroundImage: near.has(entry) ? `url(${url})` : undefined,
+      opacity: current ? 1 : 0,
+      transition: role ? 'none' : cssTransition(frame, 'opacity'),
+      // Both pictures follow the same animation clock, also when seeking into the transition.
+      ...(role && {
+        animationDuration: `${ms}ms`,
+        animationDelay: `${-elapsedMs.value}ms`,
+        animationFillMode: 'both',
+      }),
+      ...(role === 'enter' && {
+        zIndex: 1,
+        animationTimingFunction: frame?.easing,
+        '--from': entrance?.from,
+        '--from-opacity': entrance?.fade ? 0 : 1,
+      }),
+    }
+    return { url, style, cls: role === 'enter' ? `enter-${entrance!.name}` : (role ?? undefined) }
+  })
 })
 
 const pictureStyle = computed(() => {
@@ -141,16 +195,7 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
     :style="{ backgroundColor: color?.value, transition: cssTransition(color, 'background-color') }"
   >
     <div class="pictures" :style="pictureStyle">
-      <div
-        v-for="layer in layers"
-        :key="layer.url"
-        class="picture"
-        :style="{
-          backgroundImage: layer.image,
-          opacity: layer.visible ? 1 : 0,
-          transition: cssTransition(imageFrame, 'opacity'),
-        }"
-      />
+      <div v-for="layer in layers" :key="layer.url" class="picture" :class="layer.cls" :style="layer.style" />
       <div
         v-if="tint?.value.tint"
         class="tint"
@@ -193,8 +238,51 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
   background-size: cover;
 }
 
+/* Above the pictures, including one sliding in on top (z-index 1). */
 .tint {
+  z-index: 2;
   mix-blend-mode: multiply;
+}
+
+/* Picture transitions: the new picture comes in on top of the old one (duration, delay and start set inline). */
+.enter-move {
+  animation-name: move;
+}
+
+.enter-wipe {
+  animation-name: wipe;
+}
+
+/* The old picture under a covering transition: shown until the end, then hidden. */
+.covered {
+  animation-name: covered;
+  animation-timing-function: step-end;
+}
+
+@keyframes covered {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Slides and zooms: from a transform (and optionally transparent) to the picture in place. */
+@keyframes move {
+  from {
+    transform: var(--from);
+    opacity: var(--from-opacity, 1);
+  }
+}
+
+@keyframes wipe {
+  from {
+    clip-path: var(--from);
+  }
+  to {
+    clip-path: inset(0);
+  }
 }
 
 .video {

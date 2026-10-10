@@ -160,7 +160,7 @@ describe('playback controls', () => {
     expect(reduce(s, { type: 'setAutoSkip', enabled: true })).toBe(s)
   })
 
-  it('snaps the lead-in to an offered step and switches the highlight mode', () => {
+  it('snaps the lead-in to an offered step and switches the highlight mode and outline', () => {
     let s = reduce(initialState(), { type: 'setLeadIn', ms: 4900 })
     expect(s.settings.leadInMs).toBe(5000)
     expect(reduce(s, { type: 'setLeadIn', ms: 5000 })).toBe(s)
@@ -168,5 +168,8 @@ describe('playback controls', () => {
     s = reduce(s, { type: 'setHighlight', mode: 'instant' })
     expect(s.settings.highlight).toBe('instant')
     expect(reduce(s, { type: 'setHighlight', mode: 'instant' })).toBe(s)
+    s = reduce(s, { type: 'setOutline', width: 'extra' })
+    expect(s.settings.outline).toBe('extra')
+    expect(reduce(s, { type: 'setOutline', width: 'extra' })).toBe(s)
   })
 })

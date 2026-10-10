@@ -6,6 +6,9 @@ import {
   focusLineIndex,
   lineWindows,
   MAX_TRAILING_SYLLABLE_MS,
+  activeTracks,
+  pageOf,
+  trackWindows,
   shownAt,
   splitSyllables,
   syllableProgress,
@@ -19,6 +22,12 @@ describe('splitSyllables', () => {
     expect(splitSyllables('One Pie/ce')).toEqual(['One ', 'Pie', 'ce'])
     expect(splitSyllables('  double  space ')).toEqual(['double ', 'space'])
     expect(splitSyllables('')).toEqual([])
+  })
+
+  it('joins words linked by underscores into one syllable, shown with a space', () => {
+    expect(splitSyllables('Cru/ci/fied, I_am the')).toEqual(['Cru', 'ci', 'fied, ', 'I am ', 'the'])
+    expect(splitSyllables('sen/ton, and_sweep')).toEqual(['sen', 'ton, ', 'and sweep'])
+    expect(buildTimeline(lyrics(['what_is right'], [100, 200])).warnings).toEqual([])
   })
 })
 
@@ -156,5 +165,58 @@ describe('lineWindows / shownAt', () => {
     expect(blank).toBe(a)
     expect(unsynced).toBe(bLine)
     expect(bLine).not.toBe(a)
+  })
+})
+
+describe('trackWindows / activeTracks', () => {
+  // Track 0 sings at 1 s and 30 s; track 1 at 10 s; track 2 at 10.5 s (overlapping track 1).
+  const a = buildTimeline(lyrics(['A', 'B'], [100, 3000]))
+  const b = buildTimeline(lyrics(['C'], [1000]))
+  const c = buildTimeline(lyrics(['D'], [1050]))
+  const windows = [a, b, c].map((t) => trackWindows(t, 2000))
+
+  it('gives each verse of a track one window, in time order', () => {
+    expect(windows[0]!.map((w) => w.showFrom)).toEqual([-1000, 28_000])
+    expect(windows[1]).toHaveLength(1)
+  })
+
+  it('lists the tracks with lines on screen', () => {
+    expect(activeTracks(windows, 500)).toEqual([0])
+    expect(activeTracks(windows, 9000)).toEqual([1, 2])
+    expect(activeTracks(windows, 20_000)).toEqual([])
+    expect(activeTracks(windows, 29_000)).toEqual([0])
+  })
+
+  it('fills gaps with the tracks of the next verse, when asked', () => {
+    expect(activeTracks(windows, 20_000, true)).toEqual([0])
+    expect(activeTracks(windows, 5000, true)).toEqual([1])
+    expect(activeTracks(windows, 60_000, true)).toEqual([0]) // after the last verse: who sang it
+  })
+
+  it('never makes a track without synced lines active', () => {
+    const unsynced = trackWindows(buildTimeline(lyrics(['E'], [])), 2000)
+    expect(unsynced).toEqual([])
+    expect(activeTracks([...windows, unsynced], 20_000)).toEqual([])
+  })
+
+  it('uses a short lead when lyrics show all the time', () => {
+    expect(trackWindows(b, 0)[0]!.showFrom).toBe(7000)
+  })
+})
+
+describe('pageOf', () => {
+  // Paragraphs: lines 0-2, then 4-9 (6 lines).
+  const t = buildTimeline(
+    lyrics(['a', 'b', 'c', '', 'd', 'e', 'f', 'g', 'h', 'i'], [1, 2, 3, 4, 5, 6, 7, 8, 9]),
+  )
+
+  it('shows a paragraph as one page', () => {
+    expect(pageOf(t, 1, 4)).toEqual({ start: 0, end: 2 })
+  })
+
+  it('cuts long paragraphs into pages of at most maxLines', () => {
+    expect(pageOf(t, 4, 4)).toEqual({ start: 4, end: 7 })
+    expect(pageOf(t, 7, 4)).toEqual({ start: 4, end: 7 })
+    expect(pageOf(t, 8, 4)).toEqual({ start: 8, end: 9 })
   })
 })

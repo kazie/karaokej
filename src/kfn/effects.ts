@@ -131,6 +131,58 @@ export function imageColor(value: string | undefined): ImageColor {
   return { opacity: c.alpha, tint: white ? null : `rgb(${c.r} ${c.g} ${c.b})` }
 }
 
+/** How a new background picture comes in. */
+export type TransitionKind =
+  | 'cut'
+  | 'crossfade'
+  | 'slide-left'
+  | 'slide-right'
+  | 'slide-up'
+  | 'slide-down'
+  | 'wipe-left'
+  | 'wipe-right'
+  | 'wipe-up'
+  | 'wipe-down'
+  | 'zoom-in'
+  | 'zoom-in-fade'
+  | 'zoom-out'
+  | 'zoom-out-fade'
+
+/** KaraFun `ChgBgImg` `Effect` names → transition; unknown names crossfade. */
+const TRANSITIONS: [RegExp, TransitionKind][] = [
+  [/^(NoTransition)?$/i, 'cut'],
+  [/^AlphaBlending$/i, 'crossfade'],
+  // `MoveLeft`: the new picture moves in leftwards, from the right edge.
+  [/^Move ?Left$/i, 'slide-left'],
+  [/^Move ?Right$/i, 'slide-right'],
+  [/^Move ?(Top|Up)$/i, 'slide-up'],
+  [/^Move ?(Bottom|Down)$/i, 'slide-down'],
+  [/^Wipe ?Left$/i, 'wipe-left'],
+  [/^Wipe ?Right$/i, 'wipe-right'],
+  [/^Wipe ?(Top|Up)$/i, 'wipe-up'],
+  [/^Wipe ?(Bottom|Down)$/i, 'wipe-down'],
+  // `ZoomIn`: the new picture grows to full size; `ZoomOut`: it shrinks down to it. `…Fade` also fades it in.
+  [/^ZoomIn$/i, 'zoom-in'],
+  [/^ZoomInFade$/i, 'zoom-in-fade'],
+  [/^ZoomOut$/i, 'zoom-out'],
+  [/^ZoomOutFade$/i, 'zoom-out-fade'],
+]
+
+/** The transition for a KaraFun `ChgBgImg` `Effect` name. */
+export function transitionKind(effect: string | undefined): TransitionKind {
+  return TRANSITIONS.find(([pattern]) => pattern.test(effect?.trim() ?? ''))?.[1] ?? 'crossfade'
+}
+
+/** How lyric lines move: scroll up (the usual), scroll down, or stand still a page at a time. */
+export type LineMotion = 'up' | 'down' | 'still'
+
+/** KaraFun `Trajectory` name → line motion; unsupported ones (e.g. `CrazyCircles`) scroll up. */
+export function lineMotion(trajectory: string | undefined): LineMotion {
+  if (/^PlainTopToBottom$/i.test(trajectory ?? '')) return 'down'
+  if (/^Still$/i.test(trajectory ?? '')) return 'still'
+  return 'up'
+}
+
 export interface SelTextEffect {
   /** e.g. `LittleShake`, `JumpOneTime`; `NoEffect` for none. */
   name: string

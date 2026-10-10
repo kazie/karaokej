@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import LyricsView from '../components/LyricsView.vue'
+import LyricsStage from '../components/LyricsStage.vue'
 import { still } from '../kfn/effects'
 import type { LyricsStyle } from '../kfn/parseSongIni'
 import { parseKfn } from '../kfn/parseKfn'
 import { loadSong, type LyricsTrack } from '../kfn/song'
-import type { HighlightMode } from '../shared/protocol'
-import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
+import type { HighlightMode, OutlineWidth } from '../shared/protocol'
+import { makeDemoKfn, makeDuetDemoKfn, makeGroupDemoKfn } from './demoSong'
 
 /**
  * The demo song's lyrics with their own clock, for stories. The clock lives
@@ -24,8 +24,9 @@ const props = withDefaults(
     ball?: boolean
     leadInMs?: number
     highlight?: HighlightMode
-    /** The duet demo instead: one band per singer, as on the player. */
-    duet?: boolean
+    outline?: OutlineWidth
+    /** Which demo song: the duet and group demos have a band per singer, as on the player. */
+    demo?: 'solo' | 'duet' | 'group'
   }>(),
   {
     playing: true,
@@ -36,13 +37,17 @@ const props = withDefaults(
     ball: true,
     leadInMs: 0,
     highlight: 'wipe',
-    duet: false,
+    outline: 'normal',
+    demo: 'solo',
   },
 )
 
-const soloTracks = loadSong(parseKfn(makeDemoKfn())).lyrics
-const duetTracks = loadSong(parseKfn(makeDuetDemoKfn())).lyrics
-const bases = computed(() => (props.duet ? duetTracks : soloTracks))
+const DEMO_TRACKS = {
+  solo: loadSong(parseKfn(makeDemoKfn())).lyrics,
+  duet: loadSong(parseKfn(makeDuetDemoKfn())).lyrics,
+  group: loadSong(parseKfn(makeGroupDemoKfn())).lyrics,
+}
+const bases = computed(() => DEMO_TRACKS[props.demo])
 const duration = computed(() => {
   const ends = bases.value.flatMap((t) =>
     t.timeline.lines.filter((l) => l.syllables.length).map((l) => l.end),
@@ -52,7 +57,7 @@ const duration = computed(() => {
 
 const COLOR_KEYS = ['activeColor', 'inactiveColor', 'frameColor', 'inactiveFrameColor'] as const
 
-/** The demo tracks with the story's style overrides; an overridden color replaces its animated track. */
+/** The demo tracks with the story's style overrides; an overridden color or trajectory replaces its animated track. */
 const tracks = computed<LyricsTrack[]>(() =>
   bases.value.map((base) => {
     const effects = { ...base.effects }
@@ -60,6 +65,7 @@ const tracks = computed<LyricsTrack[]>(() =>
       const color = props.style[key]
       if (color) effects[key] = still(color)
     }
+    if (props.style.trajectory) effects.trajectory = still(props.style.trajectory)
     return { ...base, style: { ...base.style, ...props.style }, effects }
   }),
 )
@@ -95,28 +101,14 @@ defineExpose({ duration })
 </script>
 
 <template>
-  <div
-    v-for="(track, i) in tracks"
-    :key="i"
-    class="band"
-    :style="{ top: `${(i / tracks.length) * 100}%`, height: `${100 / tracks.length}%` }"
-  >
-    <LyricsView
-      :track="track"
-      :clock="clock"
-      :font-scale="fontScale"
-      :compact="compact || tracks.length > 1"
-      :ball="ball"
-      :lead-in-ms="leadInMs"
-      :highlight="highlight"
-    />
-  </div>
+  <LyricsStage
+    :tracks="tracks"
+    :clock="clock"
+    :font-scale="fontScale"
+    :compact="compact"
+    :ball="ball"
+    :lead-in-ms="leadInMs"
+    :highlight="highlight"
+    :outline="outline"
+  />
 </template>
-
-<style scoped>
-/* One band per track, like the player's stage. */
-.band {
-  position: absolute;
-  inset-inline: 0;
-}
-</style>

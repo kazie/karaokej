@@ -6,10 +6,12 @@ import { DEFAULT_SETTINGS, nextRequest } from '../shared/session'
 import {
   HIGHLIGHT_MODES,
   LEAD_IN_STEPS,
+  OUTLINE_WIDTHS,
   SEEK_STEP_MS,
   SPEED_STEPS,
   type HighlightMode,
   type NewPlaybackRequest,
+  type OutlineWidth,
   type PlaybackRequest,
 } from '../shared/protocol'
 
@@ -21,11 +23,13 @@ const state = reactive({
   autoSkip: false,
   leadInMs: DEFAULT_SETTINGS.leadInMs as number,
   highlight: 'wipe' as HighlightMode,
+  outline: DEFAULT_SETTINGS.outline as OutlineWidth,
   playbackRate: 1,
   request: null as PlaybackRequest | null,
 })
 const leadIns = LEAD_IN_STEPS.map((ms) => ({ label: ms ? `${ms / 1000} s` : 'Always', value: ms }))
 const highlights = HIGHLIGHT_MODES.map((m) => ({ label: m, value: m }))
+const outlines = OUTLINE_WIDTHS.map((w) => ({ label: w, value: w }))
 const speeds = SPEED_STEPS.map((s) => ({ label: speedLabel(s), value: s }))
 
 /** Mimic the session: each request gets the next sequence number. */
@@ -47,13 +51,14 @@ function onFile(event: Event): void {
       <template #controls>
         <p class="note">
           The demo has a countdown before the first line, an interlude with a progress bar, background changes
-          (crossfade and cut), a zoom pulse, a color change and a shaking last line.
+          (crossfade, cut and slide), a zoom pulse, a color change and a shaking last line.
         </p>
         <HstCheckbox v-model="state.paused" title="Paused" />
         <HstCheckbox v-model="state.ball" title="Bouncing ball" />
         <HstCheckbox v-model="state.autoSkip" title="Auto-skip long interludes" />
         <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
         <HstButtonGroup v-model="state.highlight" title="Highlight" :options="highlights" />
+        <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
         <HstSelect v-model="state.playbackRate" title="Speed" :options="speeds" />
         <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
         <HstButton @click="send({ kind: 'seekBy', deltaMs: -SEEK_STEP_MS })">−10 s</HstButton>
@@ -82,7 +87,23 @@ function onFile(event: Event): void {
         <HstCheckbox v-model="state.paused" title="Paused" />
         <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
         <HstButtonGroup v-model="state.highlight" title="Highlight" :options="highlights" />
+        <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
         <HstCheckbox v-model="state.ball" title="Bouncing ball" />
+        <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
+      </template>
+    </Variant>
+    <Variant title="Group: a track per singer">
+      <div class="frame landscape">
+        <PlayerDemo demo="group" v-bind="state" controls />
+      </div>
+      <template #controls>
+        <p class="note">
+          Five singers with a lyrics track each, like group songs that have one per character. Only the
+          singers with lines on screen get a band, labelled with their name.
+        </p>
+        <HstCheckbox v-model="state.paused" title="Paused" />
+        <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
         <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
       </template>
     </Variant>
@@ -94,8 +115,14 @@ function onFile(event: Event): void {
     <Variant title="Local .kfn file">
       <input type="file" accept=".kfn" @change="onFile" />
       <div v-if="local" class="frame landscape">
-        <PlayerDemo :file="local" paused controls />
+        <PlayerDemo :file="local" paused controls :outline="state.outline" />
       </div>
+      <template #controls>
+        <p class="note">
+          Pick a real KaraFun file to check its colors (including transparency), outline and syllables.
+        </p>
+        <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
+      </template>
     </Variant>
   </Story>
 </template>

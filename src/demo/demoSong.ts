@@ -1,4 +1,4 @@
-import { buildKfn, concatBytes, latin1Bytes, songIniText } from '../kfn/buildKfn'
+import { buildKfn, concatBytes, latin1Bytes, songIniText, type SongIniLyrics } from '../kfn/buildKfn'
 import { KfnEntryType } from '../kfn/parseKfn'
 import { buildTimeline, splitSyllables } from '../kfn/timeline'
 
@@ -7,7 +7,8 @@ export const DEMO_TEXTS = [
   'This is the de/mo song',
   'Each syl/la/ble lights up in time',
   '',
-  'Lines scroll up/ward as they are sung',
+  // `_` joins two words into one syllable, shown with a space.
+  'Lines scroll up/ward as_they are sung',
   'The next line waits be/low',
   '',
   'Scan the code to add a song',
@@ -129,6 +130,7 @@ export function makeDemoKfn(options: { encrypted?: boolean } = {}): Uint8Array {
       `${verse3}|ChgBgImg:LibImage=demo3.svg,Effect=NoTransition,TransitionTime=0,TransType=Linear`,
       `${verse3}|ChgFloatDepth:TargetFloat=-2,TransTime=10,TransType=Linear`,
       `${verse3 + 40}|ChgFloatDepth:TargetFloat=0,TransTime=30,TransType=Smooth`,
+      `${lastLine}|ChgBgImg:LibImage=demo.svg,Effect=MoveLeft,TransitionTime=100,TransType=Smooth`,
     ],
     lyricsAnims: [
       `${verse2}|ChgColActiveColor:TargetColor=#FFB347FF,FadeTime=100`,
@@ -187,29 +189,71 @@ export const DUET_LINES = {
 
 /** A synthetic duet KFN, for trying out how lyrics come and go per singer. */
 export function makeDuetDemoKfn(): Uint8Array {
-  const first = pacedLines(DUET_LINES.first)
-  const second = pacedLines(DUET_LINES.second)
+  const colors = { inactiveColor: '#F9F8F4FF', frameColor: '#010101FF' }
+  return packTracks('Duet Demo', 'demo2.svg', [
+    {
+      ...pacedLines(DUET_LINES.first),
+      ...colors,
+      caption: 'Singer one',
+      activeColor: '#C7E55CFF',
+      inactiveFrameColor: '#1E4D42FF',
+    },
+    {
+      ...pacedLines(DUET_LINES.second),
+      ...colors,
+      caption: 'Singer two',
+      activeColor: '#FF8FB1FF',
+      inactiveFrameColor: '#5A1E3AFF',
+    },
+  ])
+}
+
+/** A demo KFN with a lyrics track per singer, on one background; a tone at every singer's sync marks. */
+function packTracks(title: string, backgroundImage: string, tracks: SongIniLyrics[]): Uint8Array {
+  const [first, ...rest] = tracks
   const ini = songIniText({
-    title: 'Duet Demo',
+    title,
     artist: 'Karaokej',
     album: 'Demo',
     musicFile: DEMO_MUSIC_FILE,
-    backgroundImage: 'demo2.svg',
-    ...first,
-    activeColor: '#C7E55CFF',
-    inactiveColor: '#F9F8F4FF',
-    frameColor: '#010101FF',
-    inactiveFrameColor: '#1E4D42FF',
-    moreLyrics: [
-      {
-        ...second,
-        activeColor: '#FF8FB1FF',
-        inactiveColor: '#F9F8F4FF',
-        frameColor: '#010101FF',
-        inactiveFrameColor: '#5A1E3AFF',
-      },
-    ],
+    backgroundImage,
+    ...first!,
+    moreLyrics: rest,
   })
-  const syncs = [...new Set([...first.syncs, ...second.syncs])].sort((a, b) => a - b)
-  return packDemo('Duet Demo', ini, syncs)
+  const syncs = [...new Set(tracks.flatMap((t) => t.syncs))].sort((a, b) => a - b)
+  return packDemo(title, ini, syncs)
+}
+
+const TOGETHER = [2300, 'All of us to/geth/er now'] as const
+
+/**
+ * Five named singers, one track each, like group songs with a track per
+ * character: they take turns, two share a line, then all sing the last line.
+ */
+export const GROUP_SINGERS = [
+  { caption: 'Akira', color: '#FF6B6BFF', lines: [[300, 'I start the cy/pher off'], TOGETHER] },
+  { caption: 'Bea', color: '#4ECDC4FF', lines: [[700, 'Then I take the mic'], TOGETHER] },
+  {
+    caption: 'Chen',
+    color: '#FFD93DFF',
+    lines: [[1100, 'Pass it on to me'], [1500, 'We share this line'], TOGETHER],
+  },
+  { caption: 'Dana', color: '#A29BFEFF', lines: [[1500, 'We share this line'], TOGETHER] },
+  { caption: 'Eli', color: '#FF9FF3FF', lines: [[1900, 'Last one be/fore the end'], TOGETHER] },
+] as const
+
+/** A synthetic group KFN with a lyrics track per singer, for trying out how bands come and go. */
+export function makeGroupDemoKfn(): Uint8Array {
+  return packTracks(
+    'Group Demo',
+    'demo3.svg',
+    GROUP_SINGERS.map((s) => ({
+      ...pacedLines(s.lines),
+      caption: s.caption,
+      activeColor: s.color,
+      inactiveColor: '#F9F8F4FF',
+      frameColor: '#010101FF',
+      inactiveFrameColor: '#2A2A2AFF',
+    })),
+  )
 }

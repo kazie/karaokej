@@ -153,6 +153,7 @@ onBeforeUnmount(() => {
       :ball="current?.ball !== false"
       :lead-in-ms="state.settings.leadInMs"
       :highlight="state.settings.highlight"
+      :outline="state.settings.outline"
       @ready="onReady"
       @progress="onProgress"
       @ended="onEnded"

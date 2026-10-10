@@ -1,4 +1,4 @@
-import { HIGHLIGHT_MODES, type HighlightMode, type SessionSettings } from '../src/shared/protocol'
+import { HIGHLIGHT_MODES, isOneOf, OUTLINE_WIDTHS, type SessionSettings } from '../src/shared/protocol'
 import { DEFAULT_SETTINGS, snapLeadIn } from '../src/shared/session'
 import { transaction, type Database } from './db/database'
 
@@ -8,7 +8,8 @@ type Field<K extends keyof SessionSettings> = (v: unknown) => SessionSettings[K]
 const FIELDS: { [K in keyof SessionSettings]: Field<K> } = {
   autoSkipInterludes: (v) => (typeof v === 'boolean' ? v : undefined),
   leadInMs: (v) => (typeof v === 'number' && Number.isFinite(v) ? snapLeadIn(v) : undefined),
-  highlight: (v) => (HIGHLIGHT_MODES.includes(v as HighlightMode) ? (v as HighlightMode) : undefined),
+  highlight: (v) => (isOneOf(HIGHLIGHT_MODES, v) ? v : undefined),
+  outline: (v) => (isOneOf(OUTLINE_WIDTHS, v) ? v : undefined),
 }
 
 function parseJson(text: string): unknown {
@@ -42,6 +43,7 @@ export class SettingsRepository {
       autoSkipInterludes: pick('autoSkipInterludes'),
       leadInMs: pick('leadInMs'),
       highlight: pick('highlight'),
+      outline: pick('outline'),
     }
   }
 

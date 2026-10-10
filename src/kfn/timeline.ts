@@ -24,11 +24,17 @@ export interface Timeline {
 /** Longest wipe for the last syllable of a line before a pause. */
 export const MAX_TRAILING_SYLLABLE_MS = 1500
 
-/** Split a KaraFun lyric line into syllables: spaces separate words, `/` separates syllables. */
+/**
+ * Split a KaraFun lyric line into syllables: spaces separate words, `/`
+ * separates syllables, and `_` joins words into one syllable (shown as a space).
+ */
 export function splitSyllables(line: string): string[] {
   const words = line.split(' ').filter((w) => w !== '')
   return words.flatMap((word, wi) => {
-    const parts = word.split('/').filter((p) => p !== '')
+    const parts = word
+      .split('/')
+      .filter((p) => p !== '')
+      .map((p) => p.replaceAll('_', ' '))
     if (wi < words.length - 1 && parts.length) parts[parts.length - 1] += ' '
     return parts
   })
@@ -184,3 +190,57 @@ export function lineWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
 
 export const shownAt = (window: ShowWindow, timeMs: number): boolean =>
   timeMs >= window.showFrom && timeMs < window.hideAfter
+
+/** Lead-in for deciding when a track takes screen space, when lyrics otherwise show all the time. */
+const TRACK_LEAD_MS = 3000
+
+/**
+ * When a track has lines on screen: its verses' {@link ShowWindow}s, in time
+ * order. With `leadMs` 0 (lyrics always shown) a short lead is used instead,
+ * so a track only takes space around its own verses. A track without synced
+ * lines has none: it is never sung. Compute once per track.
+ */
+export function trackWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
+  return [...new Set(lineWindows(timeline, leadMs > 0 ? leadMs : TRACK_LEAD_MS))]
+    .filter((w) => Number.isFinite(w.showFrom))
+    .sort((a, b) => a.showFrom - b.showFrom)
+}
+
+/**
+ * Indices of the tracks with lines on screen at `timeMs`. With `fillGaps`,
+ * when no track is on, the tracks of the next verse to come are returned
+ * instead, or after the last verse the tracks that sang it (for showing
+ * lyrics all the time).
+ */
+export function activeTracks(windows: readonly ShowWindow[][], timeMs: number, fillGaps = false): number[] {
+  const on = windows.flatMap((ws, i) => (ws.some((w) => shownAt(w, timeMs)) ? [i] : []))
+  if (on.length || !fillGaps) return on
+  const nextStart = (ws: readonly ShowWindow[]) => ws.find((w) => w.showFrom > timeMs)?.showFrom ?? Infinity
+  const soonest = Math.min(...windows.map(nextStart))
+  if (Number.isFinite(soonest)) return windows.flatMap((ws, i) => (nextStart(ws) === soonest ? [i] : []))
+  const lastEnd = (ws: readonly ShowWindow[]) => Math.max(...ws.map((w) => w.hideAfter))
+  const latest = Math.max(...windows.map(lastEnd))
+  return Number.isFinite(latest) ? windows.flatMap((ws, i) => (lastEnd(ws) === latest ? [i] : [])) : []
+}
+
+/** A run of lines shown together by `Still` lyrics: indices `start` to `end` inclusive. */
+export interface Page {
+  start: number
+  end: number
+}
+
+/**
+ * The page holding line `index`: its paragraph (the lines between blank
+ * lines), cut into pieces of at most `maxLines` so long verses still fit.
+ */
+export function pageOf(timeline: Timeline, index: number, maxLines: number): Page {
+  const { lines } = timeline
+  const blank = (i: number) => !lines[i]?.syllables.length
+  let first = index
+  while (first > 0 && !blank(first - 1)) first--
+  let last = index
+  while (last < lines.length - 1 && !blank(last + 1)) last++
+  const size = Math.max(1, maxLines)
+  const start = first + Math.floor((index - first) / size) * size
+  return { start, end: Math.min(last, start + size - 1) }
+}

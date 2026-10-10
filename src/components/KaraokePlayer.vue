@@ -2,12 +2,12 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BackgroundLayer from './BackgroundLayer.vue'
 import InterludeOverlay from './InterludeOverlay.vue'
-import LyricsView from './LyricsView.vue'
-import { entryBlob, type KaraokeSong } from '../kfn/song'
+import LyricsStage from './LyricsStage.vue'
+import { entryBlob, unplayableMusic, type KaraokeSong } from '../kfn/song'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { useObjectUrl } from '../composables/useObjectUrl'
 import { buildGaps, countdownStart, gapAt, type Gap } from '../kfn/timeline'
-import type { HighlightMode, PlaybackRequest } from '../shared/protocol'
+import type { HighlightMode, OutlineWidth, PlaybackRequest } from '../shared/protocol'
 import { errorMessage, isAbortError } from '../shared/errors'
 
 const props = withDefaults(
@@ -25,6 +25,7 @@ const props = withDefaults(
     /** Show a verse this long (ms) before it is sung; 0 shows the lyrics all the time. */
     leadInMs?: number
     highlight?: HighlightMode
+    outline?: OutlineWidth
     /** Show the native audio controls (for stories and local testing). */
     controls?: boolean
   }>(),
@@ -36,6 +37,7 @@ const props = withDefaults(
     ball: true,
     leadInMs: 0,
     highlight: 'wipe',
+    outline: 'normal',
     controls: false,
   },
 )
@@ -63,7 +65,13 @@ const audio = ref<HTMLAudioElement>()
 const time = ref(0)
 /** Children read the time through this, so they don't re-render on every frame (see Clock). */
 const clock: Clock = () => time.value
-const musicUrl = useObjectUrl(() => (props.song.music ? entryBlob(props.song.music) : null))
+/** Why the song's music can't play in a browser (e.g. WMA), or null. */
+const musicProblem = computed(() =>
+  props.song.music ? unplayableMusic(props.song.music) : 'This file has no music track',
+)
+const musicUrl = useObjectUrl(() =>
+  props.song.music && !musicProblem.value ? entryBlob(props.song.music) : null,
+)
 /** Whether audio is actually playing (drives the video background). */
 const audioPlaying = ref(false)
 
@@ -80,10 +88,10 @@ let reportedReady = false
 
 watch(
   () => props.song,
-  (song) => {
+  () => {
     time.value = 0
     reportedReady = false
-    if (!song.music) emit('error', 'This file has no music track')
+    if (musicProblem.value) emit('error', musicProblem.value)
   },
   { immediate: true },
 )
@@ -228,21 +236,14 @@ defineExpose({ play })
         :playback-rate="playbackRate"
       />
       <!-- Several lyric tracks (duets, backing vocals) each get their own band. -->
-      <div
-        v-for="(track, i) in song.lyrics"
-        :key="i"
-        class="band"
-        :style="{ top: `${(i / song.lyrics.length) * 100}%`, height: `${100 / song.lyrics.length}%` }"
-      >
-        <LyricsView
-          :track="track"
-          :clock="clock"
-          :compact="song.lyrics.length > 1"
-          :ball="ball"
-          :lead-in-ms="leadInMs"
-          :highlight="highlight"
-        />
-      </div>
+      <LyricsStage
+        :tracks="song.lyrics"
+        :clock="clock"
+        :ball="ball"
+        :lead-in-ms="leadInMs"
+        :highlight="highlight"
+        :outline="outline"
+      />
       <InterludeOverlay :gap="gap" :clock="clock" :color="sungColor" />
     </div>
     <audio
@@ -276,12 +277,6 @@ defineExpose({ play })
   inset: 0;
   /* Lyrics size themselves relative to the whole stage (cqh/cqw). */
   container-type: size;
-}
-
-.band {
-  position: absolute;
-  left: 0;
-  right: 0;
 }
 
 .audio {

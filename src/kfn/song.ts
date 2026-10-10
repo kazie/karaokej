@@ -1,17 +1,28 @@
 import {
   buildTrack,
   colorStep,
+  easingFor,
   fadeStep,
   floatStep,
   imageColor,
   selTextEffect,
   still,
+  transitionKind,
   type ImageColor,
   type Keyframe,
   type SelTextEffect,
+  type TransitionKind,
 } from './effects'
 import { findEntry, KfnEntryType, type KfnEntry, type KfnFile } from './parseKfn'
-import { float, parseSongIni, type Effect, type LyricsStyle, type SongIni } from './parseSongIni'
+import {
+  DEFAULT_FONT_SIZE,
+  float,
+  parseSongIni,
+  trajectoryName,
+  type Effect,
+  type LyricsStyle,
+  type SongIni,
+} from './parseSongIni'
 import { decodeTextByLine } from './text'
 import { buildTimeline, type Timeline } from './timeline'
 
@@ -26,18 +37,34 @@ export interface LyricsEffects {
   /** KaraFun canvas units (800×600 reference). */
   offsetX: Keyframe<number>[]
   offsetY: Keyframe<number>[]
+  /** How lines move (see {@link lineMotion}); songs may switch it with `ChgTrajectory`. */
+  trajectory: Keyframe<string>[]
 }
 
 export interface LyricsTrack {
   style: LyricsStyle
   timeline: Timeline
   effects: LyricsEffects
+  /** Who sings this track, e.g. `Dejiko`; empty when not named. */
+  caption: string
+}
+
+/**
+ * Largest believable KaraFun font size. Some files have backing-vocal tracks
+ * at sizes like 530 that would fill the screen many times over.
+ */
+const MAX_FONT_SIZE = 100
+
+/** A background picture and how it comes in when it replaces the previous one. */
+export interface BackdropPicture {
+  entry: KfnEntry
+  transition: TransitionKind
 }
 
 /** The picture background and everything that changes it over time. */
 export interface Backdrop {
   /** null: no picture, just the color. */
-  image: Keyframe<KfnEntry | null>[]
+  image: Keyframe<BackdropPicture | null>[]
   color: Keyframe<string>[]
   imageColor: Keyframe<ImageColor>[]
   offsetX: Keyframe<number>[]
@@ -86,6 +113,9 @@ function lyricsEffects(e: Extract<Effect, { kind: 'lyrics' }>, shift: number): L
     selText: buildTrack(selTextEffect(e.selTextEffect), e.animations, shift, (a) =>
       a.type === 'ChgSelTextEffect' ? { value: selTextEffect(a.params.Trajectory) } : undefined,
     ),
+    trajectory: buildTrack(e.style.trajectory, e.animations, shift, (a) =>
+      a.type === 'ChgTrajectory' ? { value: trajectoryName(a.params.Trajectory) } : undefined,
+    ),
     ...offsetTracks(e, shift),
   }
 }
@@ -106,15 +136,24 @@ function backdrop(kfn: KfnFile, e: Effect | undefined, shift: number, warnings: 
     if (!entry) warnings.push(`Background image ${name} not found`)
     return entry
   }
-  const initial = e.image ? (lookup(e.image) ?? null) : null
+  const first = e.image ? lookup(e.image) : undefined
   return {
-    image: buildTrack<KfnEntry | null>(initial, e.animations, shift, (a) => {
-      if (a.type !== 'ChgBgImg' || !a.params.LibImage) return undefined
-      const entry = lookup(a.params.LibImage)
-      if (!entry) return undefined // keep the previous picture
-      const instant = !a.params.Effect || a.params.Effect === 'NoTransition'
-      return { value: entry, transitionCs: instant ? 0 : float(a.params.TransitionTime) }
-    }),
+    image: buildTrack<BackdropPicture | null>(
+      first ? { entry: first, transition: 'cut' } : null,
+      e.animations,
+      shift,
+      (a) => {
+        if (a.type !== 'ChgBgImg' || !a.params.LibImage) return undefined
+        const entry = lookup(a.params.LibImage)
+        if (!entry) return undefined // keep the previous picture
+        const transition = transitionKind(a.params.Effect)
+        return {
+          value: { entry, transition },
+          transitionCs: transition === 'cut' ? 0 : float(a.params.TransitionTime),
+          easing: easingFor(a.params.TransType),
+        }
+      },
+    ),
     color: buildTrack(e.color, e.animations, shift, (a) => colorStep(a, 'ChgColColor', e.color)),
     imageColor: buildTrack(imageColor(e.imageColor), e.animations, shift, (a) =>
       fadeStep(a, 'ChgColImageColor', imageColor),
@@ -168,11 +207,17 @@ export function loadSong(kfn: KfnFile): KaraokeSong {
 
   const enabled = (kind: Effect['kind']) => ini.effects.find((e) => e.kind === kind && e.enabled)
 
-  const lyrics = ini.effects.flatMap((e) => {
-    if (e.kind !== 'lyrics' || !e.enabled) return []
+  const lyricEffects = ini.effects.filter(
+    (e): e is Extract<Effect, { kind: 'lyrics' }> => e.kind === 'lyrics' && e.enabled,
+  )
+  // Oversized tracks take the size of the song's other lyrics.
+  const normalSize =
+    lyricEffects.map((e) => e.style.fontSize).find((size) => size <= MAX_FONT_SIZE) ?? DEFAULT_FONT_SIZE
+  const lyrics = lyricEffects.map((e): LyricsTrack => {
     const timeline = buildTimeline(e, shift)
     warnings.push(...timeline.warnings.map((w) => `${e.section}: ${w}`))
-    return [{ style: e.style, timeline, effects: lyricsEffects(e, shift) }]
+    const style = e.style.fontSize > MAX_FONT_SIZE ? { ...e.style, fontSize: normalSize } : e.style
+    return { style, timeline, effects: lyricsEffects(e, shift), caption: e.caption }
   })
 
   return {
@@ -193,6 +238,9 @@ const MIME_TYPES: Record<string, string> = {
   ogg: 'audio/ogg',
   wav: 'audio/wav',
   m4a: 'audio/mp4',
+  flac: 'audio/flac',
+  wma: 'audio/x-ms-wma',
+  wmv: 'video/x-ms-wmv',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -212,6 +260,32 @@ export function mimeType(fileName: string): string {
 
 const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.subarray(from, to))
 
+/** Start of an ASF (WMA/WMV) file: its header object's GUID. */
+const ASF_HEADER = [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11]
+/** ASF's video stream type GUID (BC19EFC0-5B4D-11CF-A8FD-00805F5C442B, as stored), declared by files with video. */
+const ASF_VIDEO_STREAM = [
+  0xc0, 0xef, 0x19, 0xbc, 0x4d, 0x5b, 0xcf, 0x11, 0xa8, 0xfd, 0x00, 0x80, 0x5f, 0x5c, 0x44, 0x2b,
+]
+/** ASF stream declarations sit in the header, near the start of the file. */
+const ASF_HEADER_SCAN = 64 * 1024
+
+/** Whether an ASF file declares a video stream (WMV) rather than only audio (WMA). */
+function asfHasVideo(data: Uint8Array): boolean {
+  const b = data.subarray(0, ASF_HEADER_SCAN)
+  const end = b.length - ASF_VIDEO_STREAM.length
+  // Jump between candidate first bytes, then compare the rest.
+  for (
+    let i = b.indexOf(ASF_VIDEO_STREAM[0]!);
+    i >= 0 && i <= end;
+    i = b.indexOf(ASF_VIDEO_STREAM[0]!, i + 1)
+  ) {
+    let j = 1
+    while (j < ASF_VIDEO_STREAM.length && b[i + j] === ASF_VIDEO_STREAM[j]) j++
+    if (j === ASF_VIDEO_STREAM.length) return true
+  }
+  return false
+}
+
 /**
  * Media type from the file's content, falling back to its name. KaraFun files
  * often carry MP4 or WebM video under an `.avi` name.
@@ -221,8 +295,22 @@ export function sniffMime(entry: Pick<KfnEntry, 'name' | 'data'>): string {
   if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video/webm'
   if (ascii(b, 4, 8) === 'ftyp') return entry.name.toLowerCase().endsWith('.m4a') ? 'audio/mp4' : 'video/mp4'
   if (ascii(b, 0, 4) === 'RIFF' && ascii(b, 8, 12) === 'AVI ') return 'video/x-msvideo'
+  if (ascii(b, 0, 4) === 'fLaC') return 'audio/flac'
   if (ascii(b, 0, 3) === 'ID3' || (b[0] === 0xff && ((b[1] ?? 0) & 0xe0) === 0xe0)) return 'audio/mpeg'
+  if (ASF_HEADER.every((byte, i) => b[i] === byte)) {
+    // ASF holds both WMA music and WMV video; the header says which streams it has.
+    return asfHasVideo(b) ? 'video/x-ms-wmv' : 'audio/x-ms-wma'
+  }
   return mimeType(entry.name)
+}
+
+/** Music formats no browser plays, with a name to tell the user. */
+const UNPLAYABLE_MUSIC: Record<string, string> = { 'audio/x-ms-wma': 'WMA', 'video/x-ms-wmv': 'WMV' }
+
+/** Why `music` can't be played in a browser, or null if it can (as far as we know). */
+export function unplayableMusic(music: Pick<KfnEntry, 'name' | 'data'>): string | null {
+  const format = UNPLAYABLE_MUSIC[sniffMime(music)]
+  return format ? `This song’s music is ${format}, which browsers can’t play` : null
 }
 
 export function entryBlob(entry: KfnEntry): Blob {

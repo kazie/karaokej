@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { KfnEntryType, parseKfn } from '../src/kfn/parseKfn'
-import { loadSong, sniffMime } from '../src/kfn/song'
+import { loadSong, sniffMime, unplayableMusic } from '../src/kfn/song'
 
 // Real KFN files are never committed. Put some in examples/ to run this locally.
 const dir = join(import.meta.dirname, '..', 'examples')
@@ -21,10 +21,12 @@ describe.each(files)('example %s', (file) => {
     expect(kfn.entries.some((e) => e.type === KfnEntryType.SongIni)).toBe(true)
   })
 
-  // Real AVI music (e.g. "Silent Hill 2 - Dog Ending") needs server-side conversion; not supported yet.
-  const needsConversion = !!song.music && sniffMime(song.music) === 'video/x-msvideo'
-  it.skipIf(needsConversion)('has music in a browser-playable format (MP3, MP4 or WebM)', () => {
-    expect(['audio/mpeg', 'video/mp4', 'video/webm']).toContain(sniffMime(song.music!))
+  // Real AVI music (e.g. "Silent Hill 2 - Dog Ending") and WMA (the player reports it as unplayable)
+  // need server-side conversion; not supported yet.
+  const needsConversion =
+    !!song.music && (sniffMime(song.music) === 'video/x-msvideo' || unplayableMusic(song.music) !== null)
+  it.skipIf(needsConversion)('has music in a browser-playable format (MP3, FLAC, MP4 or WebM)', () => {
+    expect(['audio/mpeg', 'audio/flac', 'video/mp4', 'video/webm']).toContain(sniffMime(song.music!))
   })
 
   it('decodes all Song.ini text without mojibake', () => {
@@ -58,7 +60,7 @@ describe.skipIf(!ulf)('Ulf Lundell - Öppna Landskap (mixed encoding, 26 backgro
     const image = song().backdrop.image
     expect(image).toHaveLength(26)
     expect(image.every((f) => f.value !== null)).toBe(true)
-    expect(image.some((f) => f.value?.name === 'augusti_Kräftskiva_Fest-_porträtt_ica1.jpg')).toBe(true)
+    expect(image.some((f) => f.value?.entry.name === 'augusti_Kräftskiva_Fest-_porträtt_ica1.jpg')).toBe(true)
     expect(image[1]!.startMs).toBe(68_610)
   })
 })

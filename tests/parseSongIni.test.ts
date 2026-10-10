@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { songIniText } from '../src/kfn/buildKfn'
-import { kfnColor, parseAnimation, parseIni, parseSongIni } from '../src/kfn/parseSongIni'
+import {
+  DEFAULT_FRAME_WIDTH,
+  cssRgb,
+  frameType,
+  parseColor,
+  kfnColor,
+  parseAnimation,
+  parseIni,
+  parseSongIni,
+} from '../src/kfn/parseSongIni'
 
 describe('parseIni', () => {
   it('parses sections and keeps value whitespace', () => {
@@ -22,6 +31,14 @@ describe('kfnColor', () => {
     expect(kfnColor('#FFFFFF', 'x')).toBe('rgb(255 255 255)')
     expect(kfnColor('bogus', 'fallback')).toBe('fallback')
     expect(kfnColor(undefined, 'fallback')).toBe('fallback')
+  })
+
+  it('reads its colors back, for changing their transparency', () => {
+    expect(parseColor(kfnColor('#F4D146E6', ''))).toEqual({ r: 244, g: 209, b: 70, alpha: 0.902 })
+    expect(parseColor('#c7e55c')).toEqual({ r: 199, g: 229, b: 92, alpha: 1 })
+    expect(parseColor('red')).toBeNull()
+    expect(cssRgb({ r: 1, g: 2, b: 3 }, 0.5)).toBe('rgb(1 2 3 / 0.5)')
+    expect(cssRgb({ r: 1, g: 2, b: 3 })).toBe('rgb(1 2 3)')
   })
 })
 
@@ -61,6 +78,37 @@ describe('parseSongIni', () => {
       trajectory: 'PlainBottomToTop',
       activeColor: 'rgb(31 106 182)',
     })
+  })
+
+  it('reads the outline thickness and shadow from FrameType', () => {
+    expect(frameType('Frame3')).toEqual({ width: 3, shadow: false })
+    expect(frameType('Frame2')).toEqual({ width: 2, shadow: false })
+    expect(frameType('NoFrame')).toEqual({ width: 0, shadow: false })
+    expect(frameType('NoBorder')).toEqual({ width: 0, shadow: false })
+    expect(frameType(undefined)).toEqual({ width: DEFAULT_FRAME_WIDTH, shadow: false })
+    expect(frameType('Shadow')).toEqual({ width: DEFAULT_FRAME_WIDTH, shadow: true })
+  })
+
+  it('reads the trajectory name and whether lines fade', () => {
+    const s = parseSongIni(
+      '[General]\nEffectCount=2\n[Eff1]\nID=1\nTrajectory=Still*1.000000*1.0\nIsFade=0\n[Eff2]\nID=1',
+    )
+    const [still, plain] = s.effects
+    if (still?.kind !== 'lyrics' || plain?.kind !== 'lyrics') throw new Error('expected lyrics')
+    expect(still.style).toMatchObject({ trajectory: 'Still', fade: false })
+    expect(plain.style).toMatchObject({ trajectory: '', fade: true })
+  })
+
+  it('reads the shadow frame, width stretch and singer caption', () => {
+    const s = parseSongIni(
+      '[General]\nEffectCount=2\n[Eff1]\nID=1\nFrameType=Shadow\nAspectRatio=1.5\nCaption=Dejiko\n[Eff2]\nID=1',
+    )
+    const [shadow, plain] = s.effects
+    if (shadow?.kind !== 'lyrics' || plain?.kind !== 'lyrics') throw new Error('expected lyrics')
+    expect(shadow.style).toMatchObject({ frameShadow: true, aspectRatio: 1.5 })
+    expect(shadow.caption).toBe('Dejiko')
+    expect(plain.style).toMatchObject({ frameShadow: false, aspectRatio: 1 })
+    expect(plain.caption).toBe('')
   })
 
   it('treats Enabled=0 as disabled and unknown effects as other', () => {

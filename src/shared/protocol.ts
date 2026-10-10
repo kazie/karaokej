@@ -35,9 +35,16 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 /** A request before the session numbers it. */
 export type NewPlaybackRequest = DistributiveOmit<PlaybackRequest, 'seq'>
 
+/** Whether `v` is one of `values`, e.g. a setting from an untrusted source. */
+export const isOneOf = <T>(values: readonly T[], v: unknown): v is T => values.includes(v as T)
+
 /** How the sung color fills the lyrics: a smooth wipe, or whole syllables at once. */
 export type HighlightMode = 'wipe' | 'instant'
 export const HIGHLIGHT_MODES: readonly HighlightMode[] = ['wipe', 'instant']
+
+/** Thickness of the lyrics' outline, relative to what the song asks for. */
+export type OutlineWidth = 'thin' | 'normal' | 'thick' | 'extra'
+export const OUTLINE_WIDTHS: readonly OutlineWidth[] = ['thin', 'normal', 'thick', 'extra']
 
 export interface SessionSettings {
   /** Skip long intros and interludes automatically, to the countdown. */
@@ -45,6 +52,7 @@ export interface SessionSettings {
   /** Show a verse's lines this long before they are sung; 0 shows them all the time. */
   leadInMs: LeadInStep
   highlight: HighlightMode
+  outline: OutlineWidth
 }
 
 /** Lead-in times offered on the remote (0: always show the lyrics). */
@@ -108,6 +116,7 @@ export type RemoteCommand =
   | { type: 'setAutoSkip'; enabled: boolean }
   | { type: 'setLeadIn'; ms: number }
   | { type: 'setHighlight'; mode: HighlightMode }
+  | { type: 'setOutline'; width: OutlineWidth }
   | { type: 'setBall'; itemId: string; enabled: boolean }
 
 /** Playback reports only screens may send. */

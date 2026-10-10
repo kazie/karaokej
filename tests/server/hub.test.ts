@@ -51,6 +51,11 @@ describe('parseCommand', () => {
       mode: 'instant',
     })
     expect(() => parseCommand('{"type":"setHighlight","mode":"sparkly"}')).toThrow(/mode/)
+    expect(parseCommand('{"type":"setOutline","width":"thick"}')).toEqual({
+      type: 'setOutline',
+      width: 'thick',
+    })
+    expect(() => parseCommand('{"type":"setOutline","width":"huge"}')).toThrow(/width/)
     expect(parseCommand('{"type":"skipInterlude"}')).toEqual({ type: 'skipInterlude' })
     expect(parseCommand('{"type":"enqueue","songId":"s","ball":false}')).toMatchObject({ ball: false })
     const progress = parseCommand('{"type":"progress","itemId":"a","positionMs":1}')
@@ -169,7 +174,13 @@ describe('SessionHub settings', () => {
     const remote = hub.connect(() => {})
     hub.handle(remote, JSON.stringify({ type: 'setAutoSkip', enabled: true }))
     hub.handle(remote, JSON.stringify({ type: 'setLeadIn', ms: 8000 }))
+    hub.handle(remote, JSON.stringify({ type: 'setOutline', width: 'thin' }))
     const restarted = new SessionHub(songs, { settings: new SettingsRepository(db) })
-    expect(restarted.state.settings).toEqual({ autoSkipInterludes: true, leadInMs: 8000, highlight: 'wipe' })
+    expect(restarted.state.settings).toEqual({
+      autoSkipInterludes: true,
+      leadInMs: 8000,
+      highlight: 'wipe',
+      outline: 'thin',
+    })
   })
 })

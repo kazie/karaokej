@@ -10,7 +10,12 @@ describe('SettingsRepository', () => {
 
   it('loads what it saved', () => {
     const repo = new SettingsRepository(openDb(':memory:'))
-    const settings = { autoSkipInterludes: true, leadInMs: 0, highlight: 'instant' } as const
+    const settings = {
+      autoSkipInterludes: true,
+      leadInMs: 0,
+      highlight: 'instant',
+      outline: 'thick',
+    } as const
     repo.save(settings)
     repo.save(settings) // overwrites, no duplicate keys
     expect(repo.load()).toEqual(settings)
@@ -22,6 +27,7 @@ describe('SettingsRepository', () => {
     insert.run('autoSkipInterludes', '"yes"')
     insert.run('leadInMs', '1900')
     insert.run('highlight', 'not json')
+    insert.run('outline', '"huge"')
     insert.run('removedSetting', 'true')
     expect(new SettingsRepository(db).load()).toEqual({ ...DEFAULT_SETTINGS, leadInMs: 2000 })
   })

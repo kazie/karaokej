@@ -4,6 +4,8 @@ import {
   easingFor,
   floatStep,
   imageColor,
+  lineMotion,
+  transitionKind,
   NO_SEL_TEXT_EFFECT,
   selTextEffect,
   valueAt,
@@ -70,5 +72,31 @@ describe('imageColor / selTextEffect', () => {
     expect(selTextEffect('JumpOneTime*2.000000')).toEqual({ name: 'JumpOneTime', intensity: 2 })
     expect(selTextEffect('')).toBe(NO_SEL_TEXT_EFFECT)
     expect(selTextEffect('NoEffect*1.000000*1.000000*1*1')).toBe(NO_SEL_TEXT_EFFECT)
+  })
+})
+
+describe('lineMotion', () => {
+  it('maps KaraFun trajectories to how lines move', () => {
+    expect(lineMotion('PlainBottomToTop')).toBe('up')
+    expect(lineMotion('PlainTopToBottom')).toBe('down')
+    expect(lineMotion('Still')).toBe('still')
+    expect(lineMotion('CrazyCircles')).toBe('up')
+    expect(lineMotion(undefined)).toBe('up')
+  })
+})
+
+describe('transitionKind', () => {
+  it('maps KaraFun picture change effects to transitions', () => {
+    expect(transitionKind('NoTransition')).toBe('cut')
+    expect(transitionKind(undefined)).toBe('cut')
+    expect(transitionKind('AlphaBlending')).toBe('crossfade')
+    expect(transitionKind('MoveLeft')).toBe('slide-left')
+    expect(transitionKind('MoveBottom')).toBe('slide-down')
+    expect(transitionKind('MoveTop')).toBe('slide-up')
+    expect(transitionKind('ZoomIn')).toBe('zoom-in')
+    expect(transitionKind('ZoomInFade')).toBe('zoom-in-fade')
+    expect(transitionKind('ZoomOut')).toBe('zoom-out')
+    expect(transitionKind('ZoomOutFade')).toBe('zoom-out-fade')
+    expect(transitionKind('SomethingNew')).toBe('crossfade')
   })
 })

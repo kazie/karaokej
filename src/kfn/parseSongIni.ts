@@ -27,8 +27,17 @@ export interface LyricsStyle {
   inactiveColor: string
   frameColor: string
   inactiveFrameColor: string
+  /** Outline thickness level from `FrameType=FrameN` (0: no outline). */
+  frameWidth: number
+  /** `FrameType=Shadow`: a drop shadow in the frame color instead of an outline. */
+  frameShadow: boolean
+  /** Width stretch of the text, e.g. 1.5 for 50% wider glyphs. */
+  aspectRatio: number
   alignment: 'left' | 'center' | 'right'
+  /** How lines move, e.g. `PlainBottomToTop` (scroll up) or `Still`. */
   trajectory: string
+  /** `IsFade`: lines fade in and out; otherwise they appear and disappear at once. */
+  fade: boolean
 }
 
 export interface LyricsEffect {
@@ -40,6 +49,8 @@ export interface LyricsEffect {
   style: LyricsStyle
   /** Raw `SelTextEffect`, e.g. `LittleShake*8.000000*1*1*1`: an effect on the syllable being sung. */
   selTextEffect: string
+  /** Who sings this track, e.g. `Dejiko` or `All`; empty when not named. */
+  caption: string
 }
 
 export interface BackgroundEffect {
@@ -125,11 +136,23 @@ export function parseKfnHex(value: string | undefined): KfnRgba | null {
   return { r, g, b, alpha: m[2] ? parseInt(m[2], 16) / 255 : 1 }
 }
 
+/** CSS `rgb()` for a color, with `alpha` (0..1) unless it is opaque. */
+export function cssRgb(c: Pick<KfnRgba, 'r' | 'g' | 'b'>, alpha = 1): string {
+  return alpha >= 1 ? `rgb(${c.r} ${c.g} ${c.b})` : `rgb(${c.r} ${c.g} ${c.b} / ${+alpha.toFixed(3)})`
+}
+
 /** Convert KaraFun `#RRGGBB` / `#RRGGBBAA` to a CSS color. */
 export function kfnColor(value: string | undefined, fallback: string): string {
   const c = parseKfnHex(value)
-  if (!c) return fallback
-  return c.alpha === 1 ? `rgb(${c.r} ${c.g} ${c.b})` : `rgb(${c.r} ${c.g} ${c.b} / ${+c.alpha.toFixed(3)})`
+  return c ? cssRgb(c, c.alpha) : fallback
+}
+
+/** Read back a color written by {@link cssRgb} / {@link kfnColor} (or KaraFun hex); null for other CSS colors. */
+export function parseColor(value: string | undefined): KfnRgba | null {
+  const hex = parseKfnHex(value)
+  if (hex) return hex
+  const m = /^rgb\((\d+) (\d+) (\d+)(?: \/ ([\d.]+))?\)$/.exec(value?.trim() ?? '')
+  return m ? { r: +m[1]!, g: +m[2]!, b: +m[3]!, alpha: m[4] ? Math.min(1, +m[4]) : 1 } : null
 }
 
 function int(value: string | undefined, fallback = 0): number {
@@ -158,18 +181,41 @@ function numberedValues(section: IniSection, prefix: string): string[] {
   return out
 }
 
+/** `PlainBottomToTop*1.000000*…` → `PlainBottomToTop`. */
+export const trajectoryName = (value: string | undefined): string => (value ?? '').split('*')[0]!.trim()
+
+/** Outline level for files without a (known) `FrameType`, and the size of a `Shadow`'s offset. */
+export const DEFAULT_FRAME_WIDTH = 2
+
+/** KaraFun's font size when a file doesn't give one. */
+export const DEFAULT_FONT_SIZE = 18
+
+/** `FrameType`: `Frame3` → width 3, `NoFrame` / `NoBorder` → 0, `Shadow` → a drop shadow. */
+export function frameType(value: string | undefined): { width: number; shadow: boolean } {
+  const v = value?.trim() ?? ''
+  if (/^no(frame|border)$/i.test(v)) return { width: 0, shadow: false }
+  if (/^shadow$/i.test(v)) return { width: DEFAULT_FRAME_WIDTH, shadow: true }
+  const m = /^frame(\d+)$/i.exec(v)
+  return { width: m ? parseInt(m[1]!, 10) : DEFAULT_FRAME_WIDTH, shadow: false }
+}
+
 function parseStyle(s: IniSection): LyricsStyle {
-  const [fontFamily = 'Arial', size = '18'] = (s.get('Font') ?? '').split('*')
+  const [fontFamily = 'Arial', size] = (s.get('Font') ?? '').split('*')
   const align = (s.get('Alignment') ?? 'Center').toLowerCase()
+  const frame = frameType(s.get('FrameType'))
   return {
     fontFamily: fontFamily || 'Arial',
-    fontSize: float(size, 18) || 18,
+    fontSize: float(size, DEFAULT_FONT_SIZE) || DEFAULT_FONT_SIZE,
     activeColor: kfnColor(s.get('ActiveColor'), 'rgb(255 64 64)'),
     inactiveColor: kfnColor(s.get('InactiveColor'), 'rgb(255 255 255)'),
     frameColor: kfnColor(s.get('FrameColor'), 'rgb(0 0 0)'),
     inactiveFrameColor: kfnColor(s.get('InactiveFrameColor'), 'rgb(0 0 0)'),
+    frameWidth: frame.width,
+    frameShadow: frame.shadow,
+    aspectRatio: float(s.get('AspectRatio'), 1) || 1,
     alignment: align === 'left' || align === 'right' ? align : 'center',
-    trajectory: (s.get('Trajectory') ?? '').split('*')[0] ?? '',
+    trajectory: trajectoryName(s.get('Trajectory')),
+    fade: s.get('IsFade')?.trim() !== '0',
   }
 }
 
@@ -228,6 +274,7 @@ function parseEffect(section: string, s: IniSection): Effect {
       syncs,
       style: parseStyle(s),
       selTextEffect: s.get('SelTextEffect') ?? '',
+      caption: s.get('Caption')?.trim() ?? '',
     }
   }
   if (id === EffectId.Background) {

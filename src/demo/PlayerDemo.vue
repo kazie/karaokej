@@ -3,7 +3,7 @@ import { shallowRef, watch } from 'vue'
 import KaraokePlayer from '../components/KaraokePlayer.vue'
 import { parseKfn } from '../kfn/parseKfn'
 import { loadSong, type KaraokeSong } from '../kfn/song'
-import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
+import { makeDemoKfn, makeDuetDemoKfn, makeGroupDemoKfn } from './demoSong'
 
 /**
  * A KaraokePlayer that loads its own song, for stories. Songs hold their audio
@@ -12,7 +12,7 @@ import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
  * listeners go to the player.
  */
 const props = defineProps<{
-  demo?: 'solo' | 'duet' | 'encrypted'
+  demo?: 'solo' | 'duet' | 'group' | 'encrypted'
   /** A .kfn file picked in the story; takes precedence over `demo`. */
   file?: File | null
 }>()
@@ -20,6 +20,7 @@ const props = defineProps<{
 const DEMOS = {
   solo: () => makeDemoKfn(),
   duet: () => makeDuetDemoKfn(),
+  group: () => makeGroupDemoKfn(),
   encrypted: () => makeDemoKfn({ encrypted: true }),
 }
 
