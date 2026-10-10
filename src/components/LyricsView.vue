@@ -5,13 +5,21 @@ import {
   canvasTranslate,
   cssTransition,
   latestFrame,
+  lineMotion,
   NO_SEL_TEXT_EFFECT,
   splitAlpha,
   type SplitColor,
 } from '../kfn/effects'
 import { ballAt, wipeFront } from '../kfn/wipe'
 import type { LyricsTrack } from '../kfn/song'
-import { focusLineIndex, lineWindows, shownAt, syllableProgress, type TimedLine } from '../kfn/timeline'
+import {
+  focusLineIndex,
+  lineWindows,
+  pageOf,
+  shownAt,
+  syllableProgress,
+  type TimedLine,
+} from '../kfn/timeline'
 import type { HighlightMode, OutlineWidth } from '../shared/protocol'
 
 /**
@@ -42,9 +50,10 @@ const props = withDefaults(
   { fontScale: 0.3, compact: false, ball: false, leadInMs: 0, highlight: 'wipe', outline: 'normal' },
 )
 
+/** Lines shown before and after the one in focus, where the focus line sits (% of height), and lines per `Still` page. */
 const LAYOUT = {
-  normal: { before: 2, after: 3, anchor: 45 },
-  compact: { before: 1, after: 1, anchor: 30 },
+  normal: { before: 2, after: 3, anchor: 45, page: 4 },
+  compact: { before: 1, after: 1, anchor: 30, page: 2 },
 }
 /** Share of the stage width a line may take before it is shrunk. */
 const MAX_LINE_WIDTH_CQW = 92
@@ -74,11 +83,27 @@ const focusLine = computed(() => lines.value[focusIndex.value])
 const windows = computed(() => lineWindows(props.track.timeline, props.leadInMs))
 const shown = (line: TimedLine) => shownAt(windows.value[line.index]!, props.clock())
 
+const trajectory = useKeyframe(() => props.track.effects.trajectory, props.clock)
+/** How lines move; songs may switch it mid-song. */
+const motion = computed(() => lineMotion(trajectory.value?.value))
+
+/** `Still` lyrics: the page of lines on screen, which changes when the focus moves past it. */
+const page = computed(() =>
+  motion.value === 'still' ? pageOf(props.track.timeline, focusIndex.value, layout.value.page) : null,
+)
+
+/** The line position the scroller centres on the anchor: the focus line, or the middle of the page. */
+const scrollFocus = computed(() => (page.value ? (page.value.start + page.value.end) / 2 : focusIndex.value))
+
 /**
- * Only lines near the focus are rendered. One extra, invisible line on each
- * side lets lines fade in and out as the window moves.
+ * Only lines near the focus (or the page and the one before it) are rendered.
+ * One extra, invisible line on each side lets lines fade in and out as the
+ * window moves.
  */
 const windowLines = computed(() => {
+  if (page.value) {
+    return lines.value.slice(Math.max(0, page.value.start - layout.value.page), page.value.end + 1)
+  }
   const { before, after } = layout.value
   const from = Math.max(0, focusIndex.value - before - 1)
   return lines.value.slice(from, focusIndex.value + after + 2)
@@ -215,6 +240,7 @@ function selClass(line: TimedLine, si: number): string | undefined {
 }
 
 function visible(line: TimedLine): boolean {
+  if (page.value) return line.index >= page.value.start && line.index <= page.value.end && shown(line)
   const offset = line.index - focusIndex.value
   return offset >= -layout.value.before && offset <= layout.value.after && shown(line)
 }
@@ -249,8 +275,13 @@ function sungUntil(line: TimedLine): string {
 </script>
 
 <template>
-  <div ref="root" class="lyrics" :class="{ shadow: style.frameShadow }" :style="rootStyle">
-    <div class="scroller" :style="{ '--focus': focusIndex }">
+  <div
+    ref="root"
+    class="lyrics"
+    :class="[`motion-${motion}`, { shadow: style.frameShadow, 'no-fade': !style.fade }]"
+    :style="rootStyle"
+  >
+    <div class="scroller" :style="{ '--focus': scrollFocus }">
       <p
         v-for="line in windowLines"
         :key="line.index"
@@ -316,15 +347,34 @@ function sungUntil(line: TimedLine): string {
   font-weight: bold;
   line-height: var(--line-height);
   text-align: var(--align);
-  transform: translateY(calc(var(--focus) * var(--line-height) * -1));
+  transform: translateY(calc(var(--focus) * var(--line-height) * -1 * var(--dir)));
   transition: transform 0.4s ease-out;
+}
+
+/* Lines scroll up as they are sung; top-to-bottom lyrics mirror that, so upcoming lines sit above. */
+.lyrics {
+  --dir: 1;
+}
+
+.motion-down {
+  --dir: -1;
+}
+
+/* Still lyrics show a page at a time without moving: the page changes in place. */
+.motion-still .scroller {
+  transition: none;
+}
+
+/* `IsFade=0`: lines appear and disappear at once. */
+.no-fade .line {
+  transition: none;
 }
 
 /* Lines sit at fixed slots, so rendering only a window of them keeps the layout stable. */
 .line {
   position: absolute;
   inset-inline: 0;
-  top: calc(var(--index) * var(--line-height));
+  top: calc(var(--index) * var(--line-height) * var(--dir));
   margin: 0;
   height: var(--line-height);
   /* Shrink lines that would be wider than the stage allows. */

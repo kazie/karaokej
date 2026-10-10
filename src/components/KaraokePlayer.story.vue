@@ -51,7 +51,7 @@ function onFile(event: Event): void {
       <template #controls>
         <p class="note">
           The demo has a countdown before the first line, an interlude with a progress bar, background changes
-          (crossfade and cut), a zoom pulse, a color change and a shaking last line.
+          (crossfade, cut and slide), a zoom pulse, a color change and a shaking last line.
         </p>
         <HstCheckbox v-model="state.paused" title="Paused" />
         <HstCheckbox v-model="state.ball" title="Bouncing ball" />

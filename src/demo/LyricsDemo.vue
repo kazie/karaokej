@@ -57,7 +57,7 @@ const duration = computed(() => {
 
 const COLOR_KEYS = ['activeColor', 'inactiveColor', 'frameColor', 'inactiveFrameColor'] as const
 
-/** The demo tracks with the story's style overrides; an overridden color replaces its animated track. */
+/** The demo tracks with the story's style overrides; an overridden color or trajectory replaces its animated track. */
 const tracks = computed<LyricsTrack[]>(() =>
   bases.value.map((base) => {
     const effects = { ...base.effects }
@@ -65,6 +65,7 @@ const tracks = computed<LyricsTrack[]>(() =>
       const color = props.style[key]
       if (color) effects[key] = still(color)
     }
+    if (props.style.trajectory) effects.trajectory = still(props.style.trajectory)
     return { ...base, style: { ...base.style, ...props.style }, effects }
   }),
 )

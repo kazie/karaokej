@@ -7,6 +7,7 @@ import {
   lineWindows,
   MAX_TRAILING_SYLLABLE_MS,
   activeTracks,
+  pageOf,
   trackWindows,
   shownAt,
   splitSyllables,
@@ -194,5 +195,22 @@ describe('trackWindows / activeTracks', () => {
 
   it('uses a short lead when lyrics show all the time', () => {
     expect(trackWindows(b, 0)[0]!.showFrom).toBe(7000)
+  })
+})
+
+describe('pageOf', () => {
+  // Paragraphs: lines 0-2, then 4-9 (6 lines).
+  const t = buildTimeline(
+    lyrics(['a', 'b', 'c', '', 'd', 'e', 'f', 'g', 'h', 'i'], [1, 2, 3, 4, 5, 6, 7, 8, 9]),
+  )
+
+  it('shows a paragraph as one page', () => {
+    expect(pageOf(t, 1, 4)).toEqual({ start: 0, end: 2 })
+  })
+
+  it('cuts long paragraphs into pages of at most maxLines', () => {
+    expect(pageOf(t, 4, 4)).toEqual({ start: 4, end: 7 })
+    expect(pageOf(t, 7, 4)).toEqual({ start: 4, end: 7 })
+    expect(pageOf(t, 8, 4)).toEqual({ start: 8, end: 9 })
   })
 })

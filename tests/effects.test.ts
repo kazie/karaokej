@@ -4,6 +4,8 @@ import {
   easingFor,
   floatStep,
   imageColor,
+  lineMotion,
+  transitionKind,
   NO_SEL_TEXT_EFFECT,
   selTextEffect,
   splitAlpha,
@@ -80,5 +82,26 @@ describe('splitAlpha', () => {
     expect(splitAlpha(kfnColor('#FFFFFFFF', ''))).toEqual({ color: 'rgb(255 255 255)', alpha: 1 })
     expect(splitAlpha('#c7e55c')).toEqual({ color: 'rgb(199 229 92)', alpha: 1 })
     expect(splitAlpha('red')).toEqual({ color: 'red', alpha: 1 })
+  })
+})
+
+describe('lineMotion', () => {
+  it('maps KaraFun trajectories to how lines move', () => {
+    expect(lineMotion('PlainBottomToTop')).toBe('up')
+    expect(lineMotion('PlainTopToBottom')).toBe('down')
+    expect(lineMotion('Still')).toBe('still')
+    expect(lineMotion('CrazyCircles')).toBe('up')
+    expect(lineMotion(undefined)).toBe('up')
+  })
+})
+
+describe('transitionKind', () => {
+  it('maps KaraFun picture change effects to transitions', () => {
+    expect(transitionKind('NoTransition')).toBe('cut')
+    expect(transitionKind(undefined)).toBe('cut')
+    expect(transitionKind('AlphaBlending')).toBe('crossfade')
+    expect(transitionKind('MoveLeft')).toBe('slide-left')
+    expect(transitionKind('MoveBottom')).toBe('slide-down')
+    expect(transitionKind('SomethingNew')).toBe('crossfade')
   })
 })

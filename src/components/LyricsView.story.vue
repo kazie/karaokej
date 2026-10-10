@@ -45,6 +45,8 @@ const state = reactive({
   fontFamily: 'Arial',
   fontSize: 18,
   alignment: 'center' as LyricsStyle['alignment'],
+  trajectory: 'PlainBottomToTop',
+  fade: true,
 })
 
 /** The duet demo has its own settings; it starts in its 6 s intro, where the lyrics are still hidden. */
@@ -82,6 +84,8 @@ const style = computed<Partial<LyricsStyle>>(() => ({
   fontFamily: state.fontFamily,
   fontSize: state.fontSize,
   alignment: state.alignment,
+  trajectory: state.trajectory,
+  fade: state.fade,
   frameWidth: state.frameWidth,
 }))
 
@@ -93,6 +97,12 @@ const leadIns = LEAD_IN_STEPS.map((ms) => ({ label: ms ? `${ms / 1000} s` : 'Alw
 const highlights = HIGHLIGHT_MODES.map((m) => ({ label: m, value: m }))
 const outlines = OUTLINE_WIDTHS.map((w) => ({ label: w, value: w }))
 const alignments = ['left', 'center', 'right'].map((a) => ({ label: a, value: a }))
+/** KaraFun trajectories we support: scroll up (the usual), scroll down, or a still page at a time. */
+const motions = [
+  { label: 'up', value: 'PlainBottomToTop' },
+  { label: 'down', value: 'PlainTopToBottom' },
+  { label: 'still', value: 'Still' },
+]
 </script>
 
 <template>
@@ -144,6 +154,8 @@ const alignments = ['left', 'center', 'right'].map((a) => ({ label: a, value: a 
         <HstSlider v-model="state.fontSize" title="Font size (KaraFun points)" :min="8" :max="40" :step="1" />
         <HstSlider v-model="state.fontScale" title="Font scale" :min="0.1" :max="1" :step="0.05" />
         <HstButtonGroup v-model="state.alignment" title="Alignment" :options="alignments" />
+        <HstButtonGroup v-model="state.trajectory" title="Motion" :options="motions" />
+        <HstCheckbox v-model="state.fade" title="Fade lines in and out" />
         <HstCheckbox v-model="state.compact" title="Compact (duet band)" />
       </template>
     </Variant>

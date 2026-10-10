@@ -120,7 +120,15 @@ describe('timed effects', () => {
       ['demo.svg', 0],
       ['demo2.svg', 1500], // AlphaBlending, 150 cs
       ['demo3.svg', 0], // NoTransition
+      ['demo.svg', 1000], // MoveLeft, 100 cs
     ])
+    expect(song.backdrop.imageTransition.map((f) => f.value)).toEqual([
+      'cut',
+      'crossfade',
+      'cut',
+      'slide-left',
+    ])
+    expect(song.backdrop.imageTransition.map((f) => f.startMs)).toEqual(image.map((f) => f.startMs))
     expect(song.backdrop.depth.map((f) => f.value)).toEqual([0, -2, 0])
   })
 
@@ -131,6 +139,24 @@ describe('timed effects', () => {
       ['rgb(255 179 71)', 1000],
     ])
     expect(effects.selText.map((f) => f.value.name)).toEqual(['NoEffect', 'LittleShake'])
+    expect(effects.trajectory.map((f) => f.value)).toEqual(['PlainBottomToTop'])
+  })
+
+  it('switches the line motion with ChgTrajectory', () => {
+    const ini = songIniText({
+      musicFile: 'm.mp3',
+      texts: ['a'],
+      syncs: [1],
+      lyricsAnims: ['500|ChgTrajectory:Trajectory=Still*1.000000*1.000000,TransTime=0'],
+    })
+    const kfn = buildKfn({
+      entries: [{ name: 'Song.ini', type: KfnEntryType.SongIni, data: new TextEncoder().encode(ini) }],
+    })
+    const frames = loadSong(parseKfn(kfn)).lyrics[0]!.effects.trajectory
+    expect(frames.map((f) => [f.startMs, f.value])).toEqual([
+      [0, 'PlainBottomToTop'],
+      [5000, 'Still'],
+    ])
   })
 
   it('keeps the previous picture and warns when an image is missing; lookup ignores case', () => {

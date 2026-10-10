@@ -1,17 +1,27 @@
 import {
   buildTrack,
   colorStep,
+  easingFor,
   fadeStep,
   floatStep,
   imageColor,
   selTextEffect,
   still,
+  transitionKind,
   type ImageColor,
   type Keyframe,
   type SelTextEffect,
+  type TransitionKind,
 } from './effects'
 import { findEntry, KfnEntryType, type KfnEntry, type KfnFile } from './parseKfn'
-import { float, parseSongIni, type Effect, type LyricsStyle, type SongIni } from './parseSongIni'
+import {
+  float,
+  parseSongIni,
+  trajectoryName,
+  type Effect,
+  type LyricsStyle,
+  type SongIni,
+} from './parseSongIni'
 import { decodeTextByLine } from './text'
 import { buildTimeline, type Timeline } from './timeline'
 
@@ -26,6 +36,8 @@ export interface LyricsEffects {
   /** KaraFun canvas units (800×600 reference). */
   offsetX: Keyframe<number>[]
   offsetY: Keyframe<number>[]
+  /** How lines move (see {@link lineMotion}); songs may switch it with `ChgTrajectory`. */
+  trajectory: Keyframe<string>[]
 }
 
 export interface LyricsTrack {
@@ -47,6 +59,8 @@ const DEFAULT_FONT_SIZE = 18
 export interface Backdrop {
   /** null: no picture, just the color. */
   image: Keyframe<KfnEntry | null>[]
+  /** How each picture change in `image` comes in (same keyframe times). */
+  imageTransition: Keyframe<TransitionKind>[]
   color: Keyframe<string>[]
   imageColor: Keyframe<ImageColor>[]
   offsetX: Keyframe<number>[]
@@ -95,6 +109,9 @@ function lyricsEffects(e: Extract<Effect, { kind: 'lyrics' }>, shift: number): L
     selText: buildTrack(selTextEffect(e.selTextEffect), e.animations, shift, (a) =>
       a.type === 'ChgSelTextEffect' ? { value: selTextEffect(a.params.Trajectory) } : undefined,
     ),
+    trajectory: buildTrack(e.style.trajectory, e.animations, shift, (a) =>
+      a.type === 'ChgTrajectory' ? { value: trajectoryName(a.params.Trajectory) } : undefined,
+    ),
     ...offsetTracks(e, shift),
   }
 }
@@ -103,6 +120,7 @@ function backdrop(kfn: KfnFile, e: Effect | undefined, shift: number, warnings: 
   if (e?.kind !== 'background') {
     return {
       image: still(null),
+      imageTransition: still<TransitionKind>('cut'),
       color: still('rgb(0 0 0)'),
       imageColor: still(imageColor(undefined)),
       offsetX: still(0),
@@ -121,9 +139,19 @@ function backdrop(kfn: KfnFile, e: Effect | undefined, shift: number, warnings: 
       if (a.type !== 'ChgBgImg' || !a.params.LibImage) return undefined
       const entry = lookup(a.params.LibImage)
       if (!entry) return undefined // keep the previous picture
-      const instant = !a.params.Effect || a.params.Effect === 'NoTransition'
-      return { value: entry, transitionCs: instant ? 0 : float(a.params.TransitionTime) }
+      const instant = transitionKind(a.params.Effect) === 'cut'
+      return {
+        value: entry,
+        transitionCs: instant ? 0 : float(a.params.TransitionTime),
+        easing: easingFor(a.params.TransType),
+      }
     }),
+    // Same picture changes as `image` (missing pictures skipped there too), so the keyframes line up.
+    imageTransition: buildTrack<TransitionKind>('cut', e.animations, shift, (a) =>
+      a.type === 'ChgBgImg' && a.params.LibImage && findEntry(kfn, a.params.LibImage)
+        ? { value: transitionKind(a.params.Effect) }
+        : undefined,
+    ),
     color: buildTrack(e.color, e.animations, shift, (a) => colorStep(a, 'ChgColColor', e.color)),
     imageColor: buildTrack(imageColor(e.imageColor), e.animations, shift, (a) =>
       fadeStep(a, 'ChgColImageColor', imageColor),

@@ -34,7 +34,10 @@ export interface LyricsStyle {
   /** Width stretch of the text, e.g. 1.5 for 50% wider glyphs. */
   aspectRatio: number
   alignment: 'left' | 'center' | 'right'
+  /** How lines move, e.g. `PlainBottomToTop` (scroll up) or `Still`. */
   trajectory: string
+  /** `IsFade`: lines fade in and out; otherwise they appear and disappear at once. */
+  fade: boolean
 }
 
 export interface LyricsEffect {
@@ -166,6 +169,9 @@ function numberedValues(section: IniSection, prefix: string): string[] {
   return out
 }
 
+/** `PlainBottomToTop*1.000000*…` → `PlainBottomToTop`. */
+export const trajectoryName = (value: string | undefined): string => (value ?? '').split('*')[0]!.trim()
+
 /** Outline level for files without a (known) `FrameType`. */
 export const DEFAULT_FRAME_WIDTH = 2
 
@@ -191,7 +197,8 @@ function parseStyle(s: IniSection): LyricsStyle {
     frameShadow: /^shadow$/i.test(s.get('FrameType')?.trim() ?? ''),
     aspectRatio: float(s.get('AspectRatio'), 1) || 1,
     alignment: align === 'left' || align === 'right' ? align : 'center',
-    trajectory: (s.get('Trajectory') ?? '').split('*')[0] ?? '',
+    trajectory: trajectoryName(s.get('Trajectory')),
+    fade: s.get('IsFade')?.trim() !== '0',
   }
 }
 

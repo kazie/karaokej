@@ -2,7 +2,7 @@
 import { computed, ref, shallowRef, watch, watchEffect } from 'vue'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { useObjectUrl } from '../composables/useObjectUrl'
-import { canvasTranslate, cssTransition, latestFrame } from '../kfn/effects'
+import { canvasTranslate, cssTransition, latestFrame, type TransitionKind } from '../kfn/effects'
 import type { KfnEntry } from '../kfn/parseKfn'
 import { entryBlob, sniffMime, type Backdrop, type VideoBackground } from '../kfn/song'
 
@@ -40,6 +40,8 @@ watchEffect((onCleanup) => {
 
 // Each track's keyframe now; the styles below only change at keyframes (see useKeyframe).
 const imageFrame = useKeyframe(() => props.backdrop.image, props.clock)
+const transitionFrame = useKeyframe(() => props.backdrop.imageTransition, props.clock)
+const transition = computed(() => transitionFrame.value?.value ?? 'cut')
 const color = useKeyframe(() => props.backdrop.color, props.clock)
 const tint = useKeyframe(() => props.backdrop.imageColor, props.clock)
 const offsetX = useKeyframe(() => props.backdrop.offsetX, props.clock)
@@ -47,19 +49,61 @@ const offsetY = useKeyframe(() => props.backdrop.offsetY, props.clock)
 const depth = useKeyframe(() => props.backdrop.depth, props.clock)
 
 /**
+ * How far into the current picture change we are, taken when it starts: a
+ * seek into (or past) a transition then shows it from there instead of
+ * replaying it from the start.
+ */
+const elapsedMs = ref(0)
+watch(imageFrame, (frame) => (elapsedMs.value = frame ? Math.max(0, props.clock() - frame.startMs) : 0), {
+  immediate: true,
+})
+
+/** Transitions where the new picture comes in over the old one, which stays put underneath. */
+const covers = (kind: TransitionKind) => kind !== 'crossfade' && kind !== 'cut'
+
+/**
  * One layer per picture, but only the previous, current and next pictures get
- * their image set: enough for crossfades (and preloading the next one) without
- * keeping every picture of the song decoded.
+ * their image set: enough for transitions (and preloading the next one)
+ * without keeping every picture of the song decoded.
  */
 const layers = computed(() => {
   const frames = props.backdrop.image
-  const i = imageFrame.value ? frames.indexOf(imageFrame.value) : -1
-  const near = new Set([frames[i - 1]?.value, frames[i]?.value, frames[i + 1]?.value])
-  return [...imageUrls.value].map(([entry, url]) => ({
-    url,
-    image: near.has(entry) ? `url(${url})` : undefined,
-    visible: entry === imageFrame.value?.value,
-  }))
+  const frame = imageFrame.value
+  const i = frame ? frames.indexOf(frame) : -1
+  const previous = frames[i - 1]?.value
+  const near = new Set([previous, frames[i]?.value, frames[i + 1]?.value])
+  const kind = transition.value
+  const ms = frame?.transitionMs ?? 0
+  return [...imageUrls.value].map(([entry, url]) => {
+    const current = entry === frame?.value
+    const style: Record<string, string | number | undefined> = {
+      backgroundImage: near.has(entry) ? `url(${url})` : undefined,
+      opacity: current ? 1 : 0,
+      transition: cssTransition(frame, 'opacity'),
+    }
+    if (covers(kind) && ms > 0) {
+      if (current) {
+        // The new picture animates in on top of the old one.
+        Object.assign(style, {
+          zIndex: 1,
+          transition: 'none',
+          animationDuration: `${ms}ms`,
+          animationDelay: `${-elapsedMs.value}ms`,
+          animationTimingFunction: frame?.easing,
+        })
+      } else if (entry === previous) {
+        // The old picture stays until the new one fully covers it, also when seeking into the transition.
+        Object.assign(style, {
+          transition: 'none',
+          animationDuration: `${ms}ms`,
+          animationDelay: `${-elapsedMs.value}ms`,
+        })
+      }
+    }
+    const covering = covers(kind) && ms > 0
+    const cls = covering && current ? `enter-${kind}` : covering && entry === previous ? 'covered' : undefined
+    return { url, style, cls }
+  })
 })
 
 const pictureStyle = computed(() => {
@@ -141,16 +185,7 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
     :style="{ backgroundColor: color?.value, transition: cssTransition(color, 'background-color') }"
   >
     <div class="pictures" :style="pictureStyle">
-      <div
-        v-for="layer in layers"
-        :key="layer.url"
-        class="picture"
-        :style="{
-          backgroundImage: layer.image,
-          opacity: layer.visible ? 1 : 0,
-          transition: cssTransition(imageFrame, 'opacity'),
-        }"
-      />
+      <div v-for="layer in layers" :key="layer.url" class="picture" :class="layer.cls" :style="layer.style" />
       <div
         v-if="tint?.value.tint"
         class="tint"
@@ -195,6 +230,115 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
 
 .tint {
   mix-blend-mode: multiply;
+}
+
+/* Picture transitions: the new picture comes in on top of the old one (duration and delay set inline). */
+[class*='enter-'],
+.covered {
+  animation-fill-mode: both;
+}
+
+/* The old picture under a covering transition: shown until the end, then hidden. */
+.covered {
+  animation-name: covered;
+  animation-timing-function: step-end;
+}
+
+@keyframes covered {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.enter-slide-left {
+  animation-name: slide-left;
+}
+.enter-slide-right {
+  animation-name: slide-right;
+}
+.enter-slide-up {
+  animation-name: slide-up;
+}
+.enter-slide-down {
+  animation-name: slide-down;
+}
+.enter-wipe-left {
+  animation-name: wipe-left;
+}
+.enter-wipe-right {
+  animation-name: wipe-right;
+}
+.enter-wipe-up {
+  animation-name: wipe-up;
+}
+.enter-wipe-down {
+  animation-name: wipe-down;
+}
+.enter-zoom {
+  animation-name: zoom-in;
+}
+
+/* Named for the direction the picture moves or the wipe travels. */
+@keyframes slide-left {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes slide-right {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+  }
+}
+@keyframes wipe-left {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes wipe-right {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes wipe-up {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes wipe-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@keyframes zoom-in {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
 }
 
 .video {

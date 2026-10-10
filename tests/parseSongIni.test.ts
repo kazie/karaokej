@@ -79,6 +79,16 @@ describe('parseSongIni', () => {
     expect(frameWidth('Shadow')).toBe(DEFAULT_FRAME_WIDTH)
   })
 
+  it('reads the trajectory name and whether lines fade', () => {
+    const s = parseSongIni(
+      '[General]\nEffectCount=2\n[Eff1]\nID=1\nTrajectory=Still*1.000000*1.0\nIsFade=0\n[Eff2]\nID=1',
+    )
+    const [still, plain] = s.effects
+    if (still?.kind !== 'lyrics' || plain?.kind !== 'lyrics') throw new Error('expected lyrics')
+    expect(still.style).toMatchObject({ trajectory: 'Still', fade: false })
+    expect(plain.style).toMatchObject({ trajectory: '', fade: true })
+  })
+
   it('reads the shadow frame, width stretch and singer caption', () => {
     const s = parseSongIni(
       '[General]\nEffectCount=2\n[Eff1]\nID=1\nFrameType=Shadow\nAspectRatio=1.5\nCaption=Dejiko\n[Eff2]\nID=1',

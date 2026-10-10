@@ -130,6 +130,7 @@ export function makeDemoKfn(options: { encrypted?: boolean } = {}): Uint8Array {
       `${verse3}|ChgBgImg:LibImage=demo3.svg,Effect=NoTransition,TransitionTime=0,TransType=Linear`,
       `${verse3}|ChgFloatDepth:TargetFloat=-2,TransTime=10,TransType=Linear`,
       `${verse3 + 40}|ChgFloatDepth:TargetFloat=0,TransTime=30,TransType=Smooth`,
+      `${lastLine}|ChgBgImg:LibImage=demo.svg,Effect=MoveLeft,TransitionTime=100,TransType=Smooth`,
     ],
     lyricsAnims: [
       `${verse2}|ChgColActiveColor:TargetColor=#FFB347FF,FadeTime=100`,

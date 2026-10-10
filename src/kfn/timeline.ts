@@ -218,3 +218,25 @@ export function activeTracks(windows: readonly ShowWindow[][], timeMs: number, f
   if (!Number.isFinite(soonest)) return []
   return windows.flatMap((ws, i) => (nextStart(ws) === soonest ? [i] : []))
 }
+
+/** A run of lines shown together by `Still` lyrics: indices `start` to `end` inclusive. */
+export interface Page {
+  start: number
+  end: number
+}
+
+/**
+ * The page holding line `index`: its paragraph (the lines between blank
+ * lines), cut into pieces of at most `maxLines` so long verses still fit.
+ */
+export function pageOf(timeline: Timeline, index: number, maxLines: number): Page {
+  const { lines } = timeline
+  const blank = (i: number) => !lines[i]?.syllables.length
+  let first = index
+  while (first > 0 && !blank(first - 1)) first--
+  let last = index
+  while (last < lines.length - 1 && !blank(last + 1)) last++
+  const size = Math.max(1, maxLines)
+  const start = first + Math.floor((index - first) / size) * size
+  return { start, end: Math.min(last, start + size - 1) }
+}
