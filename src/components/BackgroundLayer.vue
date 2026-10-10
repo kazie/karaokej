@@ -58,19 +58,23 @@ watch(imageFrame, (frame) => (elapsedMs.value = frame ? Math.max(0, props.clock(
 
 /**
  * Transitions where the new picture comes in over the old one, which stays put
- * underneath: the CSS animation (`enter-<name>`) and where it starts from.
- * Slides are named for the way the picture moves, wipes for the way the edge travels.
+ * underneath: the CSS animation (`enter-<name>`), where it starts from, and
+ * whether it also fades in. Slides are named for the way the picture moves,
+ * wipes for the way the edge travels.
  */
-const ENTRANCES: Partial<Record<TransitionKind, { name: string; from?: string }>> = {
-  'slide-left': { name: 'slide', from: 'translateX(100%)' },
-  'slide-right': { name: 'slide', from: 'translateX(-100%)' },
-  'slide-up': { name: 'slide', from: 'translateY(100%)' },
-  'slide-down': { name: 'slide', from: 'translateY(-100%)' },
+const ENTRANCES: Partial<Record<TransitionKind, { name: 'move' | 'wipe'; from: string; fade?: boolean }>> = {
+  'slide-left': { name: 'move', from: 'translateX(100%)' },
+  'slide-right': { name: 'move', from: 'translateX(-100%)' },
+  'slide-up': { name: 'move', from: 'translateY(100%)' },
+  'slide-down': { name: 'move', from: 'translateY(-100%)' },
   'wipe-left': { name: 'wipe', from: 'inset(0 0 0 100%)' },
   'wipe-right': { name: 'wipe', from: 'inset(0 100% 0 0)' },
   'wipe-up': { name: 'wipe', from: 'inset(100% 0 0 0)' },
   'wipe-down': { name: 'wipe', from: 'inset(0 0 100% 0)' },
-  zoom: { name: 'zoom' },
+  'zoom-in': { name: 'move', from: 'scale(0.2)' },
+  'zoom-in-fade': { name: 'move', from: 'scale(0.2)', fade: true },
+  'zoom-out': { name: 'move', from: 'scale(2)' },
+  'zoom-out-fade': { name: 'move', from: 'scale(2)', fade: true },
 }
 
 /**
@@ -105,6 +109,7 @@ const layers = computed(() => {
         zIndex: 1,
         animationTimingFunction: frame?.easing,
         '--from': entrance?.from,
+        '--from-opacity': entrance?.fade ? 0 : 1,
       }),
     }
     return { url, style, cls: role === 'enter' ? `enter-${entrance!.name}` : (role ?? undefined) }
@@ -240,16 +245,12 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
 }
 
 /* Picture transitions: the new picture comes in on top of the old one (duration, delay and start set inline). */
-.enter-slide {
-  animation-name: slide;
+.enter-move {
+  animation-name: move;
 }
 
 .enter-wipe {
   animation-name: wipe;
-}
-
-.enter-zoom {
-  animation-name: zoom-in;
 }
 
 /* The old picture under a covering transition: shown until the end, then hidden. */
@@ -267,9 +268,11 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
   }
 }
 
-@keyframes slide {
+/* Slides and zooms: from a transform (and optionally transparent) to the picture in place. */
+@keyframes move {
   from {
     transform: var(--from);
+    opacity: var(--from-opacity, 1);
   }
 }
 
@@ -279,13 +282,6 @@ const showVideo = computed(() => !videoEnded.value || !!props.video?.displayLast
   }
   to {
     clip-path: inset(0);
-  }
-}
-
-@keyframes zoom-in {
-  from {
-    transform: scale(0.2);
-    opacity: 0;
   }
 }
 

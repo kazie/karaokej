@@ -197,12 +197,13 @@ const TRACK_LEAD_MS = 3000
 /**
  * When a track has lines on screen: its verses' {@link ShowWindow}s, in time
  * order. With `leadMs` 0 (lyrics always shown) a short lead is used instead,
- * so a track only takes space around its own verses. Compute once per track.
+ * so a track only takes space around its own verses. A track without synced
+ * lines has none: it is never sung. Compute once per track.
  */
 export function trackWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
-  return [...new Set(lineWindows(timeline, leadMs > 0 ? leadMs : TRACK_LEAD_MS))].sort(
-    (a, b) => a.showFrom - b.showFrom,
-  )
+  return [...new Set(lineWindows(timeline, leadMs > 0 ? leadMs : TRACK_LEAD_MS))]
+    .filter((w) => Number.isFinite(w.showFrom))
+    .sort((a, b) => a.showFrom - b.showFrom)
 }
 
 /**

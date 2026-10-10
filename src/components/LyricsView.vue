@@ -1,14 +1,27 @@
 <script lang="ts">
+import { ref } from 'vue'
 import type { Timeline } from '../kfn/timeline'
 
 /** One canvas for measuring lyrics, shared by every lyrics view. */
 let canvas: CanvasRenderingContext2D | null | undefined
 
 /** Line widths per timeline and font, so a band that comes and goes isn't measured again. */
-const widthCache = new WeakMap<Timeline, Map<string, number[]>>()
+let widthCache = new WeakMap<Timeline, Map<string, number[]>>()
 
-/** Each line's width in em, in bold `family`. */
+/** Bumped when web fonts finish loading: widths measured before then used a fallback font. */
+const fontLoads = ref(0)
+let watchingFonts = false
+
+/** Each line's width in em, in bold `family`. Reactive to font loads when called from a computed. */
 function lineWidthsInEm(timeline: Timeline, family: string): number[] {
+  void fontLoads.value
+  if (!watchingFonts) {
+    watchingFonts = true
+    document.fonts?.addEventListener('loadingdone', () => {
+      widthCache = new WeakMap()
+      fontLoads.value++
+    })
+  }
   const byFont = widthCache.get(timeline) ?? new Map<string, number[]>()
   widthCache.set(timeline, byFont)
   let widths = byFont.get(family)
@@ -27,7 +40,7 @@ function lineWidthsInEm(timeline: Timeline, family: string): number[] {
 </script>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useKeyframe, type Clock } from '../composables/useKeyframe'
 import { canvasTranslate, cssTransition, latestFrame, lineMotion, NO_SEL_TEXT_EFFECT } from '../kfn/effects'
 import { ballAt, wipeFront } from '../kfn/wipe'
@@ -125,17 +138,21 @@ const OUTLINE_EM_PER_LEVEL = 0.025
 const OUTLINE_SCALE: Record<OutlineWidth, number> = { thin: 0.6, normal: 1, thick: 1.5, extra: 2.2 }
 
 /**
- * Colors of one layer (sung or unsung text). The layer is drawn opaque and
- * faded as a whole, so translucent text shows the background, not its own
- * outline. When the outline is more opaque than the text, the text gets the
- * difference as its own transparency.
+ * Colors of one layer (sung or unsung text). The layer is drawn with opaque
+ * text and faded as a whole to the text's transparency, so translucent text
+ * shows the background, never the outline under it (half the outline lies
+ * inside the glyphs). An outline more transparent than the text keeps the
+ * difference; one more opaque fades with the text. Invisible text leaves just
+ * the outline.
  */
 function layerPaint(text = 'rgb(255 255 255)', frame = 'rgb(0 0 0)') {
   // Song colors parse back to channels; any other CSS color (e.g. from a story) is opaque.
   const t = parseColor(text)
   const f = parseColor(frame)
-  const opacity = Math.max(t?.alpha ?? 1, f?.alpha ?? 1)
-  const rel = (css: string, c: KfnRgba | null) => (c && opacity > 0 ? cssRgb(c, c.alpha / opacity) : css)
+  const textAlpha = t?.alpha ?? 1
+  const opacity = textAlpha > 0 ? textAlpha : (f?.alpha ?? 1)
+  const rel = (css: string, c: KfnRgba | null) =>
+    c && opacity > 0 ? cssRgb(c, Math.min(1, c.alpha / opacity)) : css
   return { text: rel(text, t), frame: rel(frame, f), opacity }
 }
 

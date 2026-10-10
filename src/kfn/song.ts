@@ -270,8 +270,9 @@ const ASF_VIDEO_STREAM = [
 const ASF_HEADER_SCAN = 64 * 1024
 
 /** Whether an ASF file declares a video stream (WMV) rather than only audio (WMA). */
-function asfHasVideo(b: Uint8Array): boolean {
-  const end = Math.min(b.length, ASF_HEADER_SCAN) - ASF_VIDEO_STREAM.length
+function asfHasVideo(data: Uint8Array): boolean {
+  const b = data.subarray(0, ASF_HEADER_SCAN)
+  const end = b.length - ASF_VIDEO_STREAM.length
   // Jump between candidate first bytes, then compare the rest.
   for (
     let i = b.indexOf(ASF_VIDEO_STREAM[0]!);

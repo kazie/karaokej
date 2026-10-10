@@ -143,7 +143,10 @@ export type TransitionKind =
   | 'wipe-right'
   | 'wipe-up'
   | 'wipe-down'
-  | 'zoom'
+  | 'zoom-in'
+  | 'zoom-in-fade'
+  | 'zoom-out'
+  | 'zoom-out-fade'
 
 /** KaraFun `ChgBgImg` `Effect` names → transition; unknown names crossfade. */
 const TRANSITIONS: [RegExp, TransitionKind][] = [
@@ -158,7 +161,11 @@ const TRANSITIONS: [RegExp, TransitionKind][] = [
   [/^Wipe ?Right$/i, 'wipe-right'],
   [/^Wipe ?(Top|Up)$/i, 'wipe-up'],
   [/^Wipe ?(Bottom|Down)$/i, 'wipe-down'],
-  [/zoom/i, 'zoom'],
+  // `ZoomIn`: the new picture grows to full size; `ZoomOut`: it shrinks down to it. `…Fade` also fades it in.
+  [/^ZoomIn$/i, 'zoom-in'],
+  [/^ZoomInFade$/i, 'zoom-in-fade'],
+  [/^ZoomOut$/i, 'zoom-out'],
+  [/^ZoomOutFade$/i, 'zoom-out-fade'],
 ]
 
 /** The transition for a KaraFun `ChgBgImg` `Effect` name. */

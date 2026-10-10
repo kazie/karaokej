@@ -193,6 +193,12 @@ describe('trackWindows / activeTracks', () => {
     expect(activeTracks(windows, 60_000, true)).toEqual([0]) // after the last verse: who sang it
   })
 
+  it('never makes a track without synced lines active', () => {
+    const unsynced = trackWindows(buildTimeline(lyrics(['E'], [])), 2000)
+    expect(unsynced).toEqual([])
+    expect(activeTracks([...windows, unsynced], 20_000)).toEqual([])
+  })
+
   it('uses a short lead when lyrics show all the time', () => {
     expect(trackWindows(b, 0)[0]!.showFrom).toBe(7000)
   })
