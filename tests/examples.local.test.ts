@@ -23,8 +23,8 @@ describe.each(files)('example %s', (file) => {
 
   // Real AVI music (e.g. "Silent Hill 2 - Dog Ending") needs server-side conversion; not supported yet.
   const needsConversion = !!song.music && sniffMime(song.music) === 'video/x-msvideo'
-  it.skipIf(needsConversion)('has music in a browser-playable format (MP3, MP4 or WebM)', () => {
-    expect(['audio/mpeg', 'video/mp4', 'video/webm']).toContain(sniffMime(song.music!))
+  it.skipIf(needsConversion)('has music in a browser-playable format (MP3, FLAC, MP4 or WebM)', () => {
+    expect(['audio/mpeg', 'audio/flac', 'video/mp4', 'video/webm']).toContain(sniffMime(song.music!))
   })
 
   it('decodes all Song.ini text without mojibake', () => {

@@ -52,6 +52,7 @@ describe('mimeType', () => {
   it('maps common extensions', () => {
     expect(mimeType('a.MP3')).toBe('audio/mpeg')
     expect(mimeType('b.jpg')).toBe('image/jpeg')
+    expect(mimeType('c.flac')).toBe('audio/flac')
     expect(mimeType('noext')).toBe('application/octet-stream')
   })
 })
@@ -136,6 +137,7 @@ describe('video backgrounds', () => {
     expect(sniffMime({ name: 'x.avi', data: mp4 })).toBe('video/mp4')
     expect(sniffMime({ name: 'x.mp4', data: avi })).toBe('video/x-msvideo')
     expect(sniffMime({ name: 'x.bin', data: Uint8Array.of(0x49, 0x44, 0x33) })).toBe('audio/mpeg')
+    expect(sniffMime({ name: 'x.mp3', data: new TextEncoder().encode('fLaC\0\0\0\x22') })).toBe('audio/flac')
     expect(sniffMime({ name: 'x.png', data: new Uint8Array(8) })).toBe('image/png')
   })
 

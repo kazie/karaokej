@@ -193,6 +193,7 @@ const MIME_TYPES: Record<string, string> = {
   ogg: 'audio/ogg',
   wav: 'audio/wav',
   m4a: 'audio/mp4',
+  flac: 'audio/flac',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -221,6 +222,7 @@ export function sniffMime(entry: Pick<KfnEntry, 'name' | 'data'>): string {
   if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video/webm'
   if (ascii(b, 4, 8) === 'ftyp') return entry.name.toLowerCase().endsWith('.m4a') ? 'audio/mp4' : 'video/mp4'
   if (ascii(b, 0, 4) === 'RIFF' && ascii(b, 8, 12) === 'AVI ') return 'video/x-msvideo'
+  if (ascii(b, 0, 4) === 'fLaC') return 'audio/flac'
   if (ascii(b, 0, 3) === 'ID3' || (b[0] === 0xff && ((b[1] ?? 0) & 0xe0) === 0xe0)) return 'audio/mpeg'
   return mimeType(entry.name)
 }
