@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import LyricsView from '../components/LyricsView.vue'
+import LyricsStage from '../components/LyricsStage.vue'
 import { still } from '../kfn/effects'
 import type { LyricsStyle } from '../kfn/parseSongIni'
 import { parseKfn } from '../kfn/parseKfn'
 import { loadSong, type LyricsTrack } from '../kfn/song'
 import type { HighlightMode, OutlineWidth } from '../shared/protocol'
-import { makeDemoKfn, makeDuetDemoKfn } from './demoSong'
+import { makeDemoKfn, makeDuetDemoKfn, makeGroupDemoKfn } from './demoSong'
 
 /**
  * The demo song's lyrics with their own clock, for stories. The clock lives
@@ -25,8 +25,8 @@ const props = withDefaults(
     leadInMs?: number
     highlight?: HighlightMode
     outline?: OutlineWidth
-    /** The duet demo instead: one band per singer, as on the player. */
-    duet?: boolean
+    /** Which demo song: the duet and group demos have a band per singer, as on the player. */
+    demo?: 'solo' | 'duet' | 'group'
   }>(),
   {
     playing: true,
@@ -38,13 +38,16 @@ const props = withDefaults(
     leadInMs: 0,
     highlight: 'wipe',
     outline: 'normal',
-    duet: false,
+    demo: 'solo',
   },
 )
 
-const soloTracks = loadSong(parseKfn(makeDemoKfn())).lyrics
-const duetTracks = loadSong(parseKfn(makeDuetDemoKfn())).lyrics
-const bases = computed(() => (props.duet ? duetTracks : soloTracks))
+const DEMO_TRACKS = {
+  solo: loadSong(parseKfn(makeDemoKfn())).lyrics,
+  duet: loadSong(parseKfn(makeDuetDemoKfn())).lyrics,
+  group: loadSong(parseKfn(makeGroupDemoKfn())).lyrics,
+}
+const bases = computed(() => DEMO_TRACKS[props.demo])
 const duration = computed(() => {
   const ends = bases.value.flatMap((t) =>
     t.timeline.lines.filter((l) => l.syllables.length).map((l) => l.end),
@@ -97,29 +100,14 @@ defineExpose({ duration })
 </script>
 
 <template>
-  <div
-    v-for="(track, i) in tracks"
-    :key="i"
-    class="band"
-    :style="{ top: `${(i / tracks.length) * 100}%`, height: `${100 / tracks.length}%` }"
-  >
-    <LyricsView
-      :track="track"
-      :clock="clock"
-      :font-scale="fontScale"
-      :compact="compact || tracks.length > 1"
-      :ball="ball"
-      :lead-in-ms="leadInMs"
-      :highlight="highlight"
-      :outline="outline"
-    />
-  </div>
+  <LyricsStage
+    :tracks="tracks"
+    :clock="clock"
+    :font-scale="fontScale"
+    :compact="compact"
+    :ball="ball"
+    :lead-in-ms="leadInMs"
+    :highlight="highlight"
+    :outline="outline"
+  />
 </template>
-
-<style scoped>
-/* One band per track, like the player's stage. */
-.band {
-  position: absolute;
-  inset-inline: 0;
-}
-</style>

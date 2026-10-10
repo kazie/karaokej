@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
 import LyricsDemo from '../demo/LyricsDemo.vue'
-import { DUET_LINES, makeDemoKfn } from '../demo/demoSong'
+import { DUET_LINES, GROUP_SINGERS, makeDemoKfn } from '../demo/demoSong'
 import { parseKfn } from '../kfn/parseKfn'
 import type { LyricsStyle } from '../kfn/parseSongIni'
 import { loadSong } from '../kfn/song'
@@ -56,6 +56,16 @@ const duet = reactive({
   highlight: 'wipe' as HighlightMode,
 })
 const duetEndMs = (DUET_LINES.first.at(-1)![0] + 300) * 10
+
+/** The group demo starts in its 3 s intro. */
+const group = reactive({
+  playing: true,
+  seekMs: 0,
+  ball: true,
+  leadInMs: DEFAULT_SETTINGS.leadInMs as number,
+  highlight: 'wipe' as HighlightMode,
+})
+const groupEndMs = (GROUP_SINGERS[0].lines.at(-1)![0] + 300) * 10
 
 /** `#RRGGBB` plus an alpha of 0..1 → KaraFun `#RRGGBBAA`. */
 const withAlpha = (hex: string, alpha: number) =>
@@ -140,7 +150,7 @@ const alignments = ['left', 'center', 'right'].map((a) => ({ label: a, value: a 
     <Variant title="Duet: one singer waits">
       <div class="stage">
         <LyricsDemo
-          duet
+          demo="duet"
           :playing="duet.playing"
           :seek-ms="duet.seekMs"
           :ball="duet.ball"
@@ -158,6 +168,29 @@ const alignments = ['left', 'center', 'right'].map((a) => ({ label: a, value: a 
         <HstButtonGroup v-model="duet.highlight" title="Highlight" :options="highlights" />
         <HstCheckbox v-model="duet.ball" title="Bouncing ball" />
         <HstSlider v-model="duet.seekMs" title="Jump to (ms)" :min="0" :max="duetEndMs" :step="100" />
+      </template>
+    </Variant>
+    <Variant title="Group: a track per singer">
+      <div class="stage">
+        <LyricsDemo
+          demo="group"
+          :playing="group.playing"
+          :seek-ms="group.seekMs"
+          :ball="group.ball"
+          :lead-in-ms="group.leadInMs"
+          :highlight="group.highlight"
+        />
+      </div>
+      <template #controls>
+        <p class="note">
+          Five singers with a track each, like group songs that have one per character. Only the singers with
+          lines on screen get a band, labelled with their name; two share a line, then all sing the last one.
+        </p>
+        <HstCheckbox v-model="group.playing" title="Playing" />
+        <HstSelect v-model="group.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="group.highlight" title="Highlight" :options="highlights" />
+        <HstCheckbox v-model="group.ball" title="Bouncing ball" />
+        <HstSlider v-model="group.seekMs" title="Jump to (ms)" :min="0" :max="groupEndMs" :step="100" />
       </template>
     </Variant>
   </Story>

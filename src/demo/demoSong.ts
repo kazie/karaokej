@@ -197,6 +197,7 @@ export function makeDuetDemoKfn(): Uint8Array {
     musicFile: DEMO_MUSIC_FILE,
     backgroundImage: 'demo2.svg',
     ...first,
+    caption: 'Singer one',
     activeColor: '#C7E55CFF',
     inactiveColor: '#F9F8F4FF',
     frameColor: '#010101FF',
@@ -204,6 +205,7 @@ export function makeDuetDemoKfn(): Uint8Array {
     moreLyrics: [
       {
         ...second,
+        caption: 'Singer two',
         activeColor: '#FF8FB1FF',
         inactiveColor: '#F9F8F4FF',
         frameColor: '#010101FF',
@@ -213,4 +215,45 @@ export function makeDuetDemoKfn(): Uint8Array {
   })
   const syncs = [...new Set([...first.syncs, ...second.syncs])].sort((a, b) => a - b)
   return packDemo('Duet Demo', ini, syncs)
+}
+
+const TOGETHER = [2300, 'All of us to/geth/er now'] as const
+
+/**
+ * Five named singers, one track each, like group songs with a track per
+ * character: they take turns, two share a line, then all sing the last line.
+ */
+export const GROUP_SINGERS = [
+  { caption: 'Akira', color: '#FF6B6BFF', lines: [[300, 'I start the cy/pher off'], TOGETHER] },
+  { caption: 'Bea', color: '#4ECDC4FF', lines: [[700, 'Then I take the mic'], TOGETHER] },
+  {
+    caption: 'Chen',
+    color: '#FFD93DFF',
+    lines: [[1100, 'Pass it on to me'], [1500, 'We share this line'], TOGETHER],
+  },
+  { caption: 'Dana', color: '#A29BFEFF', lines: [[1500, 'We share this line'], TOGETHER] },
+  { caption: 'Eli', color: '#FF9FF3FF', lines: [[1900, 'Last one be/fore the end'], TOGETHER] },
+] as const
+
+/** A synthetic group KFN with a lyrics track per singer, for trying out how bands come and go. */
+export function makeGroupDemoKfn(): Uint8Array {
+  const [first, ...rest] = GROUP_SINGERS.map((s) => ({
+    ...pacedLines(s.lines),
+    caption: s.caption,
+    activeColor: s.color,
+    inactiveColor: '#F9F8F4FF',
+    frameColor: '#010101FF',
+    inactiveFrameColor: '#2A2A2AFF',
+  }))
+  const ini = songIniText({
+    title: 'Group Demo',
+    artist: 'Karaokej',
+    album: 'Demo',
+    musicFile: DEMO_MUSIC_FILE,
+    backgroundImage: 'demo3.svg',
+    ...first!,
+    moreLyrics: rest,
+  })
+  const syncs = [...new Set([first!, ...rest].flatMap((t) => t.syncs))].sort((a, b) => a - b)
+  return packDemo('Group Demo', ini, syncs)
 }

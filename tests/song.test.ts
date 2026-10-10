@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_MUSIC_FILE, DEMO_TEXTS, makeDemoKfn, makeDuetDemoKfn } from '../src/demo/demoSong'
+import {
+  DEMO_MUSIC_FILE,
+  DEMO_TEXTS,
+  GROUP_SINGERS,
+  makeDemoKfn,
+  makeDuetDemoKfn,
+  makeGroupDemoKfn,
+} from '../src/demo/demoSong'
 import { buildKfn, songIniText } from '../src/kfn/buildKfn'
-import { KfnEntryType, parseKfn } from '../src/kfn/parseKfn'
-import { loadSong, mimeType, sniffMime } from '../src/kfn/song'
+import { KfnEntryType, parseKfn, type KfnEntry } from '../src/kfn/parseKfn'
+import { loadSong, mimeType, sniffMime, unplayableMusic } from '../src/kfn/song'
 import { buildGaps, lineWindows, shownAt } from '../src/kfn/timeline'
 
 describe('loadSong', () => {
@@ -43,8 +50,54 @@ describe('loadSong', () => {
     expect(song.warnings[0]).toMatch(/gone\.mp3 not found/)
   })
 
+  it('gives oversized tracks the size of the other lyrics, and keeps captions', () => {
+    const ini = songIniText({
+      musicFile: 'm.mp3',
+      texts: ['a'],
+      syncs: [1],
+      font: 'Arial*24',
+      caption: 'Lead',
+      moreLyrics: [{ texts: ['b'], syncs: [2], font: 'Arial*530' }],
+    })
+    const kfn = buildKfn({
+      entries: [{ name: 'Song.ini', type: KfnEntryType.SongIni, data: new TextEncoder().encode(ini) }],
+    })
+    const [lead, backing] = loadSong(parseKfn(kfn)).lyrics
+    expect(lead!.style.fontSize).toBe(24)
+    expect(backing!.style.fontSize).toBe(24)
+    expect(lead!.caption).toBe('Lead')
+    expect(backing!.caption).toBe('')
+  })
+
+  it('loads the group demo: a named track per singer', () => {
+    const song = loadSong(parseKfn(makeGroupDemoKfn()))
+    expect(song.warnings).toEqual([])
+    expect(song.lyrics.map((l) => l.caption)).toEqual(GROUP_SINGERS.map((s) => s.caption))
+  })
+
   it('requires a Song.ini', () => {
     expect(() => loadSong(parseKfn(buildKfn({ entries: [] })))).toThrow(/Song\.ini/)
+  })
+})
+
+describe('unplayableMusic', () => {
+  const asf = Uint8Array.of(0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11, 0xa6, 0xd9)
+  const entry = (name: string, data: Uint8Array): KfnEntry => ({
+    name,
+    data,
+    type: KfnEntryType.Music,
+    length: data.length,
+    offset: 0,
+    storedLength: data.length,
+    flags: 0,
+    encrypted: false,
+  })
+
+  it('explains that browsers cannot play WMA, by content or by name', () => {
+    expect(sniffMime({ name: 'x.mp3', data: asf })).toBe('audio/x-ms-wma')
+    expect(unplayableMusic(entry('x.mp3', asf))).toMatch(/WMA/)
+    expect(unplayableMusic(entry('x.wma', new Uint8Array(8)))).toMatch(/WMA/)
+    expect(unplayableMusic(entry('x.mp3', Uint8Array.of(0x49, 0x44, 0x33)))).toBeNull()
   })
 })
 
@@ -53,6 +106,7 @@ describe('mimeType', () => {
     expect(mimeType('a.MP3')).toBe('audio/mpeg')
     expect(mimeType('b.jpg')).toBe('image/jpeg')
     expect(mimeType('c.flac')).toBe('audio/flac')
+    expect(mimeType('d.wma')).toBe('audio/x-ms-wma')
     expect(mimeType('noext')).toBe('application/octet-stream')
   })
 })

@@ -6,6 +6,8 @@ import {
   focusLineIndex,
   lineWindows,
   MAX_TRAILING_SYLLABLE_MS,
+  activeTracks,
+  trackWindows,
   shownAt,
   splitSyllables,
   syllableProgress,
@@ -162,5 +164,35 @@ describe('lineWindows / shownAt', () => {
     expect(blank).toBe(a)
     expect(unsynced).toBe(bLine)
     expect(bLine).not.toBe(a)
+  })
+})
+
+describe('trackWindows / activeTracks', () => {
+  // Track 0 sings at 1 s and 30 s; track 1 at 10 s; track 2 at 10.5 s (overlapping track 1).
+  const a = buildTimeline(lyrics(['A', 'B'], [100, 3000]))
+  const b = buildTimeline(lyrics(['C'], [1000]))
+  const c = buildTimeline(lyrics(['D'], [1050]))
+  const windows = [a, b, c].map((t) => trackWindows(t, 2000))
+
+  it('gives each verse of a track one window, in time order', () => {
+    expect(windows[0]!.map((w) => w.showFrom)).toEqual([-1000, 28_000])
+    expect(windows[1]).toHaveLength(1)
+  })
+
+  it('lists the tracks with lines on screen', () => {
+    expect(activeTracks(windows, 500)).toEqual([0])
+    expect(activeTracks(windows, 9000)).toEqual([1, 2])
+    expect(activeTracks(windows, 20_000)).toEqual([])
+    expect(activeTracks(windows, 29_000)).toEqual([0])
+  })
+
+  it('fills gaps with the tracks of the next verse, when asked', () => {
+    expect(activeTracks(windows, 20_000, true)).toEqual([0])
+    expect(activeTracks(windows, 5000, true)).toEqual([1])
+    expect(activeTracks(windows, 60_000, true)).toEqual([])
+  })
+
+  it('uses a short lead when lyrics show all the time', () => {
+    expect(trackWindows(b, 0)[0]!.showFrom).toBe(7000)
   })
 })

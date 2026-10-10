@@ -32,7 +32,16 @@ export interface LyricsTrack {
   style: LyricsStyle
   timeline: Timeline
   effects: LyricsEffects
+  /** Who sings this track, e.g. `Dejiko`; empty when not named. */
+  caption: string
 }
+
+/**
+ * Largest believable KaraFun font size. Some files have backing-vocal tracks
+ * at sizes like 530 that would fill the screen many times over.
+ */
+const MAX_FONT_SIZE = 100
+const DEFAULT_FONT_SIZE = 18
 
 /** The picture background and everything that changes it over time. */
 export interface Backdrop {
@@ -168,11 +177,17 @@ export function loadSong(kfn: KfnFile): KaraokeSong {
 
   const enabled = (kind: Effect['kind']) => ini.effects.find((e) => e.kind === kind && e.enabled)
 
-  const lyrics = ini.effects.flatMap((e) => {
-    if (e.kind !== 'lyrics' || !e.enabled) return []
+  const lyricEffects = ini.effects.filter(
+    (e): e is Extract<Effect, { kind: 'lyrics' }> => e.kind === 'lyrics' && e.enabled,
+  )
+  // Oversized tracks take the size of the song's other lyrics.
+  const normalSize =
+    lyricEffects.map((e) => e.style.fontSize).find((size) => size <= MAX_FONT_SIZE) ?? DEFAULT_FONT_SIZE
+  const lyrics = lyricEffects.map((e): LyricsTrack => {
     const timeline = buildTimeline(e, shift)
     warnings.push(...timeline.warnings.map((w) => `${e.section}: ${w}`))
-    return [{ style: e.style, timeline, effects: lyricsEffects(e, shift) }]
+    const style = e.style.fontSize > MAX_FONT_SIZE ? { ...e.style, fontSize: normalSize } : e.style
+    return { style, timeline, effects: lyricsEffects(e, shift), caption: e.caption }
   })
 
   return {
@@ -194,6 +209,7 @@ const MIME_TYPES: Record<string, string> = {
   wav: 'audio/wav',
   m4a: 'audio/mp4',
   flac: 'audio/flac',
+  wma: 'audio/x-ms-wma',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -213,6 +229,9 @@ export function mimeType(fileName: string): string {
 
 const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.subarray(from, to))
 
+/** Start of an ASF (WMA/WMV) file: its header object's GUID. */
+const ASF_HEADER = [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11]
+
 /**
  * Media type from the file's content, falling back to its name. KaraFun files
  * often carry MP4 or WebM video under an `.avi` name.
@@ -224,7 +243,17 @@ export function sniffMime(entry: Pick<KfnEntry, 'name' | 'data'>): string {
   if (ascii(b, 0, 4) === 'RIFF' && ascii(b, 8, 12) === 'AVI ') return 'video/x-msvideo'
   if (ascii(b, 0, 4) === 'fLaC') return 'audio/flac'
   if (ascii(b, 0, 3) === 'ID3' || (b[0] === 0xff && ((b[1] ?? 0) & 0xe0) === 0xe0)) return 'audio/mpeg'
+  if (ASF_HEADER.every((byte, i) => b[i] === byte)) return 'audio/x-ms-wma'
   return mimeType(entry.name)
+}
+
+/** Music formats no browser plays, with a name to tell the user. */
+const UNPLAYABLE_MUSIC: Record<string, string> = { 'audio/x-ms-wma': 'WMA' }
+
+/** Why `music` can't be played in a browser, or null if it can (as far as we know). */
+export function unplayableMusic(music: KfnEntry): string | null {
+  const format = UNPLAYABLE_MUSIC[sniffMime(music)]
+  return format ? `This song’s music is ${format}, which browsers can’t play` : null
 }
 
 export function entryBlob(entry: KfnEntry): Blob {

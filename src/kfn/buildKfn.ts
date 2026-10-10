@@ -113,6 +113,8 @@ export function buildKfn({ header = {}, entries, key }: BuildKfnOptions): Uint8A
 
 /** One lyrics track (effect ID 1) of a Song.ini. */
 export interface SongIniLyrics {
+  /** Who sings the track (`Caption=`). */
+  caption?: string
   texts: string[]
   /** Centiseconds, one per syllable. */
   syncs: number[]
@@ -150,6 +152,7 @@ function lyricsEffect(o: SongIniLyrics): string[] {
   return [
     'ID=1',
     'Enabled=-1',
+    ...(o.caption ? [`Caption=${o.caption}`] : []),
     ...syncLines,
     `Font=${o.font ?? 'Arial*18'}`,
     `ActiveColor=${o.activeColor ?? '#1F6AB6FF'}`,

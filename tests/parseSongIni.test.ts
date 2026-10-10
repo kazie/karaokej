@@ -74,8 +74,21 @@ describe('parseSongIni', () => {
     expect(frameWidth('Frame3')).toBe(3)
     expect(frameWidth('Frame2')).toBe(2)
     expect(frameWidth('NoFrame')).toBe(0)
+    expect(frameWidth('NoBorder')).toBe(0)
     expect(frameWidth(undefined)).toBe(DEFAULT_FRAME_WIDTH)
     expect(frameWidth('Shadow')).toBe(DEFAULT_FRAME_WIDTH)
+  })
+
+  it('reads the shadow frame, width stretch and singer caption', () => {
+    const s = parseSongIni(
+      '[General]\nEffectCount=2\n[Eff1]\nID=1\nFrameType=Shadow\nAspectRatio=1.5\nCaption=Dejiko\n[Eff2]\nID=1',
+    )
+    const [shadow, plain] = s.effects
+    if (shadow?.kind !== 'lyrics' || plain?.kind !== 'lyrics') throw new Error('expected lyrics')
+    expect(shadow.style).toMatchObject({ frameShadow: true, aspectRatio: 1.5 })
+    expect(shadow.caption).toBe('Dejiko')
+    expect(plain.style).toMatchObject({ frameShadow: false, aspectRatio: 1 })
+    expect(plain.caption).toBe('')
   })
 
   it('treats Enabled=0 as disabled and unknown effects as other', () => {

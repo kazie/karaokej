@@ -136,6 +136,7 @@ const rootStyle = computed(() => {
     '--color-fade': `${latestFrame(...colors)?.transitionMs ?? 0}ms`,
     '--sel-intensity': selEffect.value.intensity,
     '--align': style.value.alignment,
+    '--aspect': style.value.aspectRatio,
     '--anchor': `${layout.value.anchor}%`,
     transform: canvasTranslate(offsetX.value?.value, offsetY.value?.value),
     transition: cssTransition(move, 'transform'),
@@ -248,7 +249,7 @@ function sungUntil(line: TimedLine): string {
 </script>
 
 <template>
-  <div ref="root" class="lyrics" :style="rootStyle">
+  <div ref="root" class="lyrics" :class="{ shadow: style.frameShadow }" :style="rootStyle">
     <div class="scroller" :style="{ '--focus': focusIndex }">
       <p
         v-for="line in windowLines"
@@ -258,35 +259,40 @@ function sungUntil(line: TimedLine): string {
         :class="[lineState(line), { hidden: !visible(line) }]"
         :style="{
           '--index': line.index,
-          '--fit': `${MAX_LINE_WIDTH_CQW / Math.max(lineWidthsEm[line.index] ?? 1, 0.01)}cqw`,
+          '--fit': `${MAX_LINE_WIDTH_CQW / Math.max((lineWidthsEm[line.index] ?? 1) * style.aspectRatio, 0.01)}cqw`,
         }"
       >
-        <!-- Each layer: an outline copy of the text under the text itself, clipped at the wipe. -->
-        <span
-          v-for="layer in ['base', 'fill']"
-          :key="layer"
-          class="layer"
-          :class="layer"
-          :style="{ '--sung-until': sungUntil(line) }"
-          :aria-hidden="layer === 'fill' || undefined"
-        >
+        <!-- Stretched as the song asks; measurements, the wipe and the ball are all inside, so they stretch along. -->
+        <span class="stretch">
+          <!-- Each layer: an outline copy of the text under the text itself, clipped at the wipe. -->
           <span
-            v-for="copy in ['stroke', 'text']"
-            :key="copy"
-            class="copy"
-            :class="copy"
-            :aria-hidden="copy === 'stroke' || undefined"
+            v-for="layer in ['base', 'fill']"
+            :key="layer"
+            class="layer"
+            :class="layer"
+            :style="{ '--sung-until': sungUntil(line) }"
+            :aria-hidden="layer === 'fill' || undefined"
           >
-            <span v-for="(syl, si) in line.syllables" :key="si" class="syl" :class="selClass(line, si)">{{
-              syl.text
-            }}</span>
+            <span
+              v-for="copy in ['stroke', 'text']"
+              :key="copy"
+              class="copy"
+              :class="copy"
+              :aria-hidden="copy === 'stroke' || undefined"
+            >
+              <span v-for="(syl, si) in line.syllables" :key="si" class="syl" :class="selClass(line, si)">{{
+                syl.text
+              }}</span>
+            </span>
           </span>
+          <span
+            v-if="line.index === focusIndex && ballPosition"
+            class="ball"
+            :style="{
+              transform: `translate(${ballPosition.x}px, ${-ballPosition.lift * 0.55}em) scaleX(${1 / style.aspectRatio})`,
+            }"
+          />
         </span>
-        <span
-          v-if="line.index === focusIndex && ballPosition"
-          class="ball"
-          :style="{ transform: `translate(${ballPosition.x}px, ${-ballPosition.lift * 0.55}em)` }"
-        />
       </p>
     </div>
   </div>
@@ -350,6 +356,14 @@ function sungUntil(line: TimedLine): string {
   pointer-events: none;
 }
 
+/* Wider (or narrower) glyphs, from the side the line is aligned to. */
+.stretch {
+  display: block;
+  position: relative;
+  transform: scaleX(var(--aspect, 1));
+  transform-origin: var(--align) center;
+}
+
 /* Both layers hold the same text, so their glyphs line up exactly. */
 .layer {
   display: block;
@@ -390,6 +404,12 @@ function sungUntil(line: TimedLine): string {
   inset: 0;
   color: var(--stroke);
   -webkit-text-stroke: calc(2 * var(--outline)) var(--stroke);
+}
+
+/* `FrameType=Shadow`: the copy sits down and right of the text instead of around it. */
+.shadow .stroke {
+  -webkit-text-stroke: 0;
+  transform: translate(calc(1.5 * var(--outline)), calc(1.5 * var(--outline)));
 }
 
 .text {

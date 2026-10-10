@@ -29,6 +29,10 @@ export interface LyricsStyle {
   inactiveFrameColor: string
   /** Outline thickness level from `FrameType=FrameN` (0: no outline). */
   frameWidth: number
+  /** `FrameType=Shadow`: a drop shadow in the frame color instead of an outline. */
+  frameShadow: boolean
+  /** Width stretch of the text, e.g. 1.5 for 50% wider glyphs. */
+  aspectRatio: number
   alignment: 'left' | 'center' | 'right'
   trajectory: string
 }
@@ -42,6 +46,8 @@ export interface LyricsEffect {
   style: LyricsStyle
   /** Raw `SelTextEffect`, e.g. `LittleShake*8.000000*1*1*1`: an effect on the syllable being sung. */
   selTextEffect: string
+  /** Who sings this track, e.g. `Dejiko` or `All`; empty when not named. */
+  caption: string
 }
 
 export interface BackgroundEffect {
@@ -163,10 +169,10 @@ function numberedValues(section: IniSection, prefix: string): string[] {
 /** Outline level for files without a (known) `FrameType`. */
 export const DEFAULT_FRAME_WIDTH = 2
 
-/** `FrameType`: `Frame3` → 3, `NoFrame` → 0. */
+/** `FrameType`: `Frame3` → 3, `NoFrame` / `NoBorder` → 0. */
 export function frameWidth(value: string | undefined): number {
   const v = value?.trim() ?? ''
-  if (/^noframe$/i.test(v)) return 0
+  if (/^no(frame|border)$/i.test(v)) return 0
   const m = /^frame(\d+)$/i.exec(v)
   return m ? parseInt(m[1]!, 10) : DEFAULT_FRAME_WIDTH
 }
@@ -182,6 +188,8 @@ function parseStyle(s: IniSection): LyricsStyle {
     frameColor: kfnColor(s.get('FrameColor'), 'rgb(0 0 0)'),
     inactiveFrameColor: kfnColor(s.get('InactiveFrameColor'), 'rgb(0 0 0)'),
     frameWidth: frameWidth(s.get('FrameType')),
+    frameShadow: /^shadow$/i.test(s.get('FrameType')?.trim() ?? ''),
+    aspectRatio: float(s.get('AspectRatio'), 1) || 1,
     alignment: align === 'left' || align === 'right' ? align : 'center',
     trajectory: (s.get('Trajectory') ?? '').split('*')[0] ?? '',
   }
@@ -242,6 +250,7 @@ function parseEffect(section: string, s: IniSection): Effect {
       syncs,
       style: parseStyle(s),
       selTextEffect: s.get('SelTextEffect') ?? '',
+      caption: s.get('Caption')?.trim() ?? '',
     }
   }
   if (id === EffectId.Background) {

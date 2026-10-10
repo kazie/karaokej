@@ -92,6 +92,21 @@ function onFile(event: Event): void {
         <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
       </template>
     </Variant>
+    <Variant title="Group: a track per singer">
+      <div class="frame landscape">
+        <PlayerDemo demo="group" v-bind="state" controls />
+      </div>
+      <template #controls>
+        <p class="note">
+          Five singers with a lyrics track each, like group songs that have one per character. Only the
+          singers with lines on screen get a band, labelled with their name.
+        </p>
+        <HstCheckbox v-model="state.paused" title="Paused" />
+        <HstSelect v-model="state.leadInMs" title="Show lyrics ahead" :options="leadIns" />
+        <HstButtonGroup v-model="state.outline" title="Outline" :options="outlines" />
+        <HstButton @click="send({ kind: 'restart' })">Restart</HstButton>
+      </template>
+    </Variant>
     <Variant title="Encrypted demo song">
       <div class="frame landscape">
         <PlayerDemo demo="encrypted" paused controls />

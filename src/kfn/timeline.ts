@@ -190,3 +190,31 @@ export function lineWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
 
 export const shownAt = (window: ShowWindow, timeMs: number): boolean =>
   timeMs >= window.showFrom && timeMs < window.hideAfter
+
+/** Lead-in for deciding when a track takes screen space, when lyrics otherwise show all the time. */
+const TRACK_LEAD_MS = 3000
+
+/**
+ * When a track has lines on screen: its verses' {@link ShowWindow}s, in time
+ * order. With `leadMs` 0 (lyrics always shown) a short lead is used instead,
+ * so a track only takes space around its own verses. Compute once per track.
+ */
+export function trackWindows(timeline: Timeline, leadMs: number): ShowWindow[] {
+  return [...new Set(lineWindows(timeline, leadMs > 0 ? leadMs : TRACK_LEAD_MS))].sort(
+    (a, b) => a.showFrom - b.showFrom,
+  )
+}
+
+/**
+ * Indices of the tracks with lines on screen at `timeMs`. With `fillGaps`,
+ * when no track is on, the tracks of the next verse to come are returned
+ * instead (for showing lyrics all the time).
+ */
+export function activeTracks(windows: readonly ShowWindow[][], timeMs: number, fillGaps = false): number[] {
+  const on = windows.flatMap((ws, i) => (ws.some((w) => shownAt(w, timeMs)) ? [i] : []))
+  if (on.length || !fillGaps) return on
+  const nextStart = (ws: readonly ShowWindow[]) => ws.find((w) => w.showFrom > timeMs)?.showFrom ?? Infinity
+  const soonest = Math.min(...windows.map(nextStart))
+  if (!Number.isFinite(soonest)) return []
+  return windows.flatMap((ws, i) => (nextStart(ws) === soonest ? [i] : []))
+}
