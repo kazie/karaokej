@@ -1,6 +1,6 @@
 # Built and run with Podman; see deploy/systemd/karaokej.service.
 
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # Install the exact pnpm version pinned in package.json ("packageManager").
@@ -14,7 +14,7 @@ RUN pnpm build
 FROM base AS prod-deps
 RUN pnpm install --prod --frozen-lockfile
 
-FROM node:24-alpine
+FROM node:26-alpine
 ENV NODE_ENV=production \
     PORT=3000 \
     KARAOKEJ_LIBRARY=/library \
