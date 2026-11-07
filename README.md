@@ -8,7 +8,8 @@
 
 ## Quick start
 
-Requires Node (see `.nvmrc`) and pnpm (the version is pinned in `package.json`).
+Requires Node (see `.nvmrc`) and pnpm (the version is pinned in `package.json`). With [Nix](https://nixos.org),
+`nix develop` (or `direnv allow`, thanks to `.envrc`) gives you both.
 
 ```sh
 pnpm install

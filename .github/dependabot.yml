@@ -27,6 +27,13 @@ updates:
       - dependency-name: node
         update-types: ['version-update:semver-major']
 
+  # The Nix dev shell's nixpkgs (flake.lock). Merged by hand: CI doesn't build the dev shell, so a green run says
+  # nothing about it.
+  - package-ecosystem: nix
+    directory: /
+    schedule:
+      interval: weekly
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
