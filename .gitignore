@@ -12,3 +12,4 @@ examples/
 # Local database
 data/
 dist-server/
+.direnv/
