@@ -24,18 +24,18 @@
     "start": "node dist-server/index.mjs"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.6",
+    "@hono/node-server": "^2.1.7",
     "@noble/ciphers": "^2.4.0",
-    "hono": "^4.13.16",
+    "hono": "^4.13.18",
     "uqr": "^0.1.3",
-    "vue": "^3.5.44",
-    "vue-router": "^5.4.0",
-    "ws": "^8.22.1"
+    "vue": "^3.5.45",
+    "vue-router": "^5.5.0",
+    "ws": "^8.22.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@histoire/plugin-vue": "1.0.0-beta.1",
-    "@iconify-json/carbon": "^1.2.29",
+    "@iconify-json/carbon": "^1.2.30",
     "@iconify-json/fluent": "^1.2.61",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify-json/ri": "^1.2.10",
@@ -45,18 +45,18 @@
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-vue": "^10.12.0",
+    "eslint-plugin-vue": "^10.12.1",
     "globals": "^17.14.0",
     "histoire": "1.0.0-beta.1",
     "jiti": "^2.7.0",
-    "prettier": "^3.9.10",
-    "tsdown": "^0.23.5",
+    "prettier": "^3.10.1",
+    "tsdown": "^0.23.7",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.72.1",
-    "vite": "^7.3.7",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^7.3.8",
     "vitest": "^5.1.0",
-    "vue-eslint-parser": "^10.4.1",
+    "vue-eslint-parser": "^10.4.2",
     "vue-tsc": "^3.3.14"
   }
 }
