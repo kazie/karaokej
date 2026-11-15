@@ -19,8 +19,7 @@ defineProps<{
     <div class="text">
       <h1>Karaoke<span>j</span></h1>
       <p v-if="loading" class="lead">
-        Loading <strong>{{ loading }}</strong
-        >…
+        Loading <strong>{{ loading }}</strong>…
       </p>
       <p v-else class="lead">Scan the code to pick a song</p>
       <p class="url">{{ url }}</p>
